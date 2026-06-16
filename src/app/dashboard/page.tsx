@@ -567,6 +567,14 @@ export default function DashboardPage() {
       (voter) => voter.voted && voter.support_status === "Confirmed Supporter"
     ).length;
 
+    const opponentVoted = voters.filter(
+      (voter) => voter.voted && voter.support_status === "Not Supporting"
+    ).length;
+
+    const undecidedVoted = voters.filter(
+      (voter) => voter.voted && voter.support_status === "Undecided"
+    ).length;
+
     const confirmedNotVoted = voters.filter(
       (voter) => !voter.voted && voter.support_status === "Confirmed Supporter"
     ).length;
@@ -587,6 +595,10 @@ export default function DashboardPage() {
     const votesNeededFromProjected = Math.max(0, target - projectedVotes);
     const confirmedCushion = confirmed - target;
     const projectedCushion = projectedVotes - target;
+    const opponentNotVoted = Math.max(0, notSupporting - opponentVoted);
+    const undecidedNotVoted = Math.max(0, undecided - undecidedVoted);
+    const votedComparisonTotal =
+      confirmedVoted + opponentVoted + undecidedVoted;
 
     const victoryStatus = getVictoryStatus(projectedVotes, confirmed, target);
 
@@ -600,6 +612,11 @@ export default function DashboardPage() {
       unknown,
       pickupIssues,
       confirmedVoted,
+      opponentVoted,
+      undecidedVoted,
+      opponentNotVoted,
+      undecidedNotVoted,
+      votedComparisonTotal,
       confirmedNotVoted,
       confirmedPickupNotVoted,
       assigned,
@@ -843,19 +860,15 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100">
-      <section className="bg-slate-950 px-4 py-4 text-white sm:px-6 sm:py-8">
+      <section className="border-b border-slate-200 bg-white px-4 py-4 text-slate-950 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
           <div className="flex min-w-0 flex-col gap-3 sm:gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
-                Team Rigo
-              </p>
-
-              <h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:mt-3 sm:text-4xl md:text-5xl">
+              <h1 className="break-words text-2xl font-black tracking-tight sm:text-4xl md:text-5xl">
                 Dashboard
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm text-slate-300 sm:mt-3 sm:text-base">
+              <p className="mt-2 max-w-3xl text-sm text-slate-600 sm:mt-3 sm:text-base">
                 {settings?.election_name || "Team Rigo Campaign"} ·{" "}
                 {profile?.full_name}
               </p>
@@ -865,14 +878,14 @@ export default function DashboardPage() {
               <button
                 onClick={loadDashboard}
                 disabled={refreshing}
-                className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-black text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-5 sm:py-3"
+                className="shrink-0 rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-5 sm:py-3"
               >
                 {refreshing ? "..." : "Refresh"}
               </button>
 
               <Link
                 href="/campaign-setup"
-                className="shrink-0 rounded-full border border-white/20 px-4 py-2 text-center text-sm font-black text-white hover:bg-white/10 sm:rounded-2xl sm:px-5 sm:py-3"
+                className="shrink-0 rounded-full border border-slate-300 px-4 py-2 text-center text-sm font-black text-slate-700 hover:bg-slate-50 sm:rounded-2xl sm:px-5 sm:py-3"
               >
                 Setup
               </Link>
@@ -887,22 +900,22 @@ export default function DashboardPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm font-semibold text-red-100 sm:mt-6">
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 sm:mt-6">
               {message}
             </div>
           )}
 
           {stats.target <= 0 && (
-            <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100 sm:mt-6">
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 sm:mt-6">
               Vote target is not set. Go to Campaign Setup and enter the Vote
               Target to Win.
             </div>
           )}
 
-          <div className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-4 shadow-xl sm:mt-8 sm:p-6">
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:mt-8 sm:p-6">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-300 sm:text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:text-sm">
                   Win Status
                 </p>
 
@@ -922,20 +935,20 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <p className="mt-2 text-sm text-slate-300 sm:mt-3">
+            <p className="mt-2 text-sm text-slate-600 sm:mt-3">
               {stats.victoryStatus.description}
             </p>
 
             <div className="mt-4">
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-slate-300">Projected</span>
-                <span className="font-black text-white">
+                <span className="text-slate-500">Projected</span>
+                <span className="font-black text-slate-900">
                   {formatNumber(stats.projectedVotes)} /{" "}
                   {formatNumber(stats.target)}
                 </span>
               </div>
 
-              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10 sm:h-4">
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200 sm:h-4">
                 <div
                   className={`h-3 rounded-full sm:h-4 ${progressClass(
                     stats.victoryStatus.tone
@@ -947,55 +960,77 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
-              <CompactMetric
-                label="Our Projected"
-                value={formatNumber(stats.projectedVotes)}
-                tone="blue"
-              />
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-100 text-slate-600">
+                    <th className="px-3 py-2 font-black sm:px-4 sm:py-3">
+                      Group
+                    </th>
+                    <th className="px-3 py-2 text-right font-black sm:px-4 sm:py-3">
+                      Voted
+                    </th>
+                    <th className="px-3 py-2 text-right font-black sm:px-4 sm:py-3">
+                      Total
+                    </th>
+                    <th className="px-3 py-2 text-right font-black sm:px-4 sm:py-3">
+                      Left
+                    </th>
+                  </tr>
+                </thead>
 
-              <CompactMetric
-                label={opponentName}
-                value={formatNumber(stats.opponentEstimate)}
-                tone="red"
-              />
+                <tbody>
+                  <tr className="border-b border-slate-100">
+                    <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
+                      Team Rigo
+                    </td>
+                    <td className="px-3 py-3 text-right font-black text-green-700 sm:px-4">
+                      {formatNumber(stats.confirmedVoted)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                      {formatNumber(stats.confirmed)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-amber-700 sm:px-4">
+                      {formatNumber(stats.confirmedNotVoted)}
+                    </td>
+                  </tr>
 
-              <CompactMetric
-                label="Margin"
-                value={
-                  stats.raceMargin >= 0
-                    ? `+${formatNumber(stats.raceMargin)}`
-                    : `-${formatNumber(Math.abs(stats.raceMargin))}`
-                }
-                tone={stats.raceMargin >= 0 ? "green" : "red"}
-              />
+                  <tr className="border-b border-slate-100">
+                    <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
+                      {opponentName}
+                    </td>
+                    <td className="px-3 py-3 text-right font-black text-red-700 sm:px-4">
+                      {formatNumber(stats.opponentVoted)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                      {formatNumber(stats.notSupporting)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                      {formatNumber(stats.opponentNotVoted)}
+                    </td>
+                  </tr>
 
-              <CompactMetric
-                label="Not Voted"
-                value={formatNumber(stats.confirmedNotVoted)}
-                tone="amber"
-              />
+                  <tr>
+                    <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
+                      Undecided
+                    </td>
+                    <td className="px-3 py-3 text-right font-black text-purple-700 sm:px-4">
+                      {formatNumber(stats.undecidedVoted)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                      {formatNumber(stats.undecided)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                      {formatNumber(stats.undecidedNotVoted)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            <div className="mt-3 rounded-2xl bg-slate-950/30 p-3 text-sm text-slate-200">
-              <span className="font-black text-white">Race comparison:</span>{" "}
-              Our projected {formatNumber(stats.projectedVotes)} vs.{" "}
-              {opponentName} {formatNumber(stats.opponentEstimate)}. Margin:{" "}
-              <span
-                className={
-                  stats.raceMargin >= 0 ? "font-black text-green-300" : "font-black text-red-300"
-                }
-              >
-                {stats.raceMargin >= 0
-                  ? `+${formatNumber(stats.raceMargin)}`
-                  : `-${formatNumber(Math.abs(stats.raceMargin))}`}
-              </span>
-            </div>
-
-            <p className="mt-3 hidden text-xs text-slate-400 sm:block">
-              Our projection uses confirmed supporters plus 50% of leaning
-              supporters. Opponent estimate is tallied from voters marked Not
-              Supporting. This is not a record of how anyone voted.
+            <p className="mt-3 text-xs text-slate-500">
+              This table combines support status with the scrutineer voted
+              marker. It is not a record of anyone’s private ballot.
             </p>
           </div>
 
