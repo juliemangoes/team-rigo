@@ -246,7 +246,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-blue-100 bg-blue-50 text-blue-700"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -672,7 +672,7 @@ export default function UploadPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading upload...
             </h1>
@@ -723,7 +723,7 @@ export default function UploadPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
               {message}
             </div>
           )}
@@ -772,7 +772,7 @@ export default function UploadPage() {
                   type="file"
                   accept=".csv,text/csv"
                   onChange={handleFileChange}
-                  className="mt-2 block w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm font-bold text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-700 file:px-4 file:py-3 file:font-black file:text-white"
+                  className="mt-2 block w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm font-bold text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-700 file:px-4 file:py-3 file:font-black file:text-white"
                 />
                 <p className="mt-3 text-xs font-semibold text-slate-500">
                   Required: {REQUIRED_COLUMNS.join(", ")}. Recommended:{" "}
@@ -826,7 +826,7 @@ export default function UploadPage() {
                       stats.error > 0 ||
                       missingColumns.length > 0
                     }
-                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
                   >
                     {importing ? "Importing..." : "Import Ready Rows"}
                   </button>

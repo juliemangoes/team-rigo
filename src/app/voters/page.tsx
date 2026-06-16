@@ -160,7 +160,7 @@ function pillClass(color: string | null | undefined, value?: string | null) {
     return "bg-green-100 text-green-800";
   }
 
-  if (color === "blue") return "bg-blue-100 text-blue-800";
+  if (color === "blue") return "bg-sky-100 text-sky-800";
   if (color === "purple" || value === "Leaning Supporter") {
     return "bg-purple-100 text-purple-800";
   }
@@ -211,7 +211,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-blue-100 bg-blue-50 text-blue-700"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -246,7 +246,7 @@ function SelectField({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
     >
       {children}
     </select>
@@ -724,7 +724,7 @@ export default function VotersPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading voters...
             </h1>
@@ -777,7 +777,7 @@ export default function VotersPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
               {message}
             </div>
           )}
@@ -836,7 +836,7 @@ export default function VotersPage() {
                     setSearch(event.target.value);
                     resetToFirstPage();
                   }}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
                   placeholder="Name, reg no., phone, street..."
                 />
               </div>
@@ -981,7 +981,7 @@ export default function VotersPage() {
 
                       bulkUpdate({ campaigner_id: bulkCampaignerId });
                     }}
-                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                    className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
                   >
                     Apply
                   </button>
@@ -1029,7 +1029,7 @@ export default function VotersPage() {
               </div>
 
               {loadingVoters && (
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
                   Loading...
                 </span>
               )}
@@ -1045,7 +1045,7 @@ export default function VotersPage() {
                     key={voter.id}
                     className={`rounded-3xl border p-4 ${
                       isSelected
-                        ? "border-blue-300 bg-blue-50"
+                        ? "border-sky-300 bg-sky-50"
                         : "border-slate-200 bg-white"
                     }`}
                   >
@@ -1159,7 +1159,7 @@ export default function VotersPage() {
 
                         <button
                           onClick={() => openManageModal(voter)}
-                          className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                          className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
                         >
                           Manage
                         </button>
@@ -1351,7 +1351,7 @@ export default function VotersPage() {
                         <td className="px-3 py-3">
                           <button
                             onClick={() => openManageModal(voter)}
-                            className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white hover:bg-blue-800"
+                            className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white hover:bg-sky-800"
                           >
                             Manage
                           </button>
@@ -1428,7 +1428,7 @@ export default function VotersPage() {
                     <input
                       value={manageContact}
                       onChange={(event) => setManageContact(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
                       placeholder="Contact number"
                     />
                   </div>
@@ -1479,7 +1479,7 @@ export default function VotersPage() {
                     <textarea
                       value={manageNotes}
                       onChange={(event) => setManageNotes(event.target.value)}
-                      className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                      className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
                       placeholder="Notes"
                     />
                   </div>
@@ -1495,7 +1495,7 @@ export default function VotersPage() {
 
                   <button
                     onClick={saveManageModal}
-                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800"
+                    className="rounded-2xl bg-sky-700 px-4 py-3 font-black text-white hover:bg-sky-800"
                   >
                     Save Changes
                   </button>

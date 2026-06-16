@@ -224,11 +224,11 @@ function getWinStatus(
 function toneClasses(tone: Tone) {
   if (tone === "blue") {
     return {
-      border: "border-blue-100",
-      bg: "bg-blue-50",
-      text: "text-blue-700",
-      pill: "bg-blue-100 text-blue-800",
-      bar: "bg-blue-600",
+      border: "border-sky-100",
+      bg: "bg-sky-50",
+      text: "text-sky-700",
+      pill: "bg-sky-100 text-sky-800",
+      bar: "bg-sky-600",
     };
   }
 
@@ -370,7 +370,7 @@ function ActionChip({
       href={href}
       className={`shrink-0 rounded-full px-4 py-2 text-sm font-black ${
         primary
-          ? "bg-blue-700 text-white"
+          ? "bg-sky-700 text-white"
           : "border border-slate-200 bg-white text-slate-700"
       }`}
     >
@@ -402,7 +402,7 @@ function ProjectedBar({
   return (
     <div className={`${target > 0 ? "pt-6" : ""} relative`}>
       <div className="flex h-5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
-        <div className="h-5 bg-blue-600" style={{ width: `${ourWidth}%` }} />
+        <div className="h-5 bg-sky-600" style={{ width: `${ourWidth}%` }} />
         <div className="h-5 bg-amber-400" style={{ width: `${undecidedWidth}%` }} />
         <div className="h-5 bg-red-600" style={{ width: `${opponentWidth}%` }} />
       </div>
@@ -905,7 +905,7 @@ export default function DashboardPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
           <h1 className="mt-5 text-lg font-black text-slate-900">
             Loading dashboard...
           </h1>
@@ -964,7 +964,7 @@ export default function DashboardPage() {
 
               <Link
                 href="/voters"
-                className="shrink-0 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                className="shrink-0 rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
               >
                 Voters
               </Link>
@@ -1023,7 +1023,7 @@ export default function DashboardPage() {
 
               <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-slate-500">
                 <span className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-blue-600" />
+                  <span className="h-3 w-3 rounded-full bg-sky-600" />
                   {OUR_NAME}: {formatNumber(stats.projected)}
                 </span>
                 <span className="flex items-center gap-2">
@@ -1119,10 +1119,10 @@ export default function DashboardPage() {
                       <td className="px-3 py-3 text-right font-bold text-green-700">
                         {formatNumber(stats.confirmed)}
                       </td>
-                      <td className="px-3 py-3 text-right font-bold text-blue-700">
+                      <td className="px-3 py-3 text-right font-bold text-sky-700">
                         {formatNumber(stats.leaning)}
                       </td>
-                      <td className="px-3 py-3 text-right font-black text-blue-700">
+                      <td className="px-3 py-3 text-right font-black text-sky-700">
                         {formatNumber(stats.projected)}
                       </td>
                     </tr>
@@ -1301,7 +1301,7 @@ export default function DashboardPage() {
                   <div className="mt-4 grid grid-cols-4 gap-2 text-center">
                     <div>
                       <p className="text-[11px] font-bold text-slate-400">Us</p>
-                      <p className="text-lg font-black text-blue-700">
+                      <p className="text-lg font-black text-sky-700">
                         {formatNumber(item.ourProjected)}
                       </p>
                     </div>
@@ -1340,7 +1340,7 @@ export default function DashboardPage() {
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                     <th className="py-3 pr-3 font-black">Zone</th>
                     <th className="px-3 py-3 font-black">Total</th>
-                    <th className="px-3 py-3 font-black text-blue-700">Projected</th>
+                    <th className="px-3 py-3 font-black text-sky-700">Projected</th>
                     <th className="px-3 py-3 font-black text-red-700">Opponent</th>
                     <th className="px-3 py-3 font-black">Margin</th>
                     <th className="px-3 py-3 font-black">Live Us</th>
@@ -1360,7 +1360,7 @@ export default function DashboardPage() {
                       <td className="px-3 py-3 text-slate-600">
                         {formatNumber(item.total)}
                       </td>
-                      <td className="px-3 py-3 font-black text-blue-700">
+                      <td className="px-3 py-3 font-black text-sky-700">
                         {formatNumber(item.ourProjected)}
                       </td>
                       <td className="px-3 py-3 font-black text-red-700">
@@ -1373,7 +1373,7 @@ export default function DashboardPage() {
                       >
                         {formatSigned(item.margin)}
                       </td>
-                      <td className="px-3 py-3 font-bold text-blue-700">
+                      <td className="px-3 py-3 font-bold text-sky-700">
                         {formatNumber(item.liveOur)}
                       </td>
                       <td className="px-3 py-3 font-bold text-red-700">
@@ -1487,7 +1487,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    <p className="shrink-0 text-xl font-black text-blue-700">
+                    <p className="shrink-0 text-xl font-black text-sky-700">
                       {formatNumber(item.confirmed)}
                     </p>
                   </div>

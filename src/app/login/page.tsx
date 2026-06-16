@@ -74,7 +74,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#e9edff] p-4 sm:p-6">
       <div className="grid w-full max-w-5xl items-center gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="hidden min-h-[560px] overflow-hidden rounded-[2rem] bg-[#2029a6] p-8 text-white shadow-2xl lg:flex lg:flex-col lg:items-center lg:justify-center">
+        <section className="hidden min-h-[560px] overflow-hidden rounded-[2rem] bg-[#0369a1] p-8 text-white shadow-2xl lg:flex lg:flex-col lg:items-center lg:justify-center">
           <div className="flex h-24 w-24 items-center justify-center rounded-[2rem] bg-white/10 text-3xl font-black tracking-tight shadow-inner">
             TR
           </div>
@@ -90,7 +90,7 @@ export default function LoginPage() {
 
         <section className="mx-auto w-full max-w-md overflow-hidden rounded-[2rem] bg-white px-6 py-8 shadow-2xl sm:px-8 sm:py-10 lg:min-h-[560px] lg:px-10">
           <div className="flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#2029a6] text-xl font-black text-white shadow-lg shadow-blue-900/20">
+            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#0369a1] text-xl font-black text-white shadow-lg shadow-sky-900/20">
               TR
             </div>
           </div>
@@ -114,14 +114,14 @@ export default function LoginPage() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") login();
                 }}
-                className="w-full rounded-xl border border-slate-100 bg-white px-4 py-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.06)] outline-none transition placeholder:text-slate-400 focus:border-[#2029a6] focus:ring-4 focus:ring-blue-100"
+                className="w-full rounded-xl border border-slate-100 bg-white px-4 py-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.06)] outline-none transition placeholder:text-slate-400 focus:border-[#0369a1] focus:ring-4 focus:ring-sky-100"
                 placeholder="Email"
               />
             </div>
 
             <div>
               <label className="sr-only">Password</label>
-              <div className="flex rounded-xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition focus-within:border-[#2029a6] focus-within:ring-4 focus-within:ring-blue-100">
+              <div className="flex rounded-xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition focus-within:border-[#0369a1] focus-within:ring-4 focus-within:ring-sky-100">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
@@ -136,7 +136,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
-                  className="shrink-0 px-4 text-xs font-black text-[#2029a6]"
+                  className="shrink-0 px-4 text-xs font-black text-[#0369a1]"
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -152,7 +152,7 @@ export default function LoginPage() {
             <button
               onClick={login}
               disabled={loading}
-              className="w-full rounded-xl bg-[#2029a6] px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-[#18208a] disabled:cursor-not-allowed disabled:bg-blue-300"
+              className="w-full rounded-xl bg-[#0369a1] px-5 py-4 text-sm font-black text-white shadow-lg shadow-sky-900/20 transition hover:bg-[#075985] disabled:cursor-not-allowed disabled:bg-sky-300"
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>

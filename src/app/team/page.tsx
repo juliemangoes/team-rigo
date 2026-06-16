@@ -67,7 +67,7 @@ function formatNumber(value: number) {
 }
 
 function rolePillClass(role: string | null) {
-  if (role === "Campaign Manager") return "bg-blue-100 text-blue-800";
+  if (role === "Campaign Manager") return "bg-sky-100 text-sky-800";
   if (role === "Zone Leader") return "bg-purple-100 text-purple-800";
   if (role === "Campaigner") return "bg-green-100 text-green-800";
   if (role === "Driver") return "bg-amber-100 text-amber-800";
@@ -118,7 +118,7 @@ function TextInput({
       type={type}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
       placeholder={placeholder}
     />
   );
@@ -137,7 +137,7 @@ function SelectInput({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
     >
       {children}
     </select>
@@ -157,7 +157,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-blue-100 bg-blue-50 text-blue-700"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -521,7 +521,7 @@ export default function TeamSetupPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading team setup...
             </h1>
@@ -572,7 +572,7 @@ export default function TeamSetupPage() {
 
               <button
                 onClick={openCreateForm}
-                className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800"
+                className="rounded-2xl bg-sky-700 px-5 py-3 text-sm font-black text-white hover:bg-sky-800"
               >
                 Add Team Member
               </button>
@@ -580,7 +580,7 @@ export default function TeamSetupPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
               {message}
             </div>
           )}
@@ -727,7 +727,7 @@ export default function TeamSetupPage() {
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <button
                       onClick={() => openEditForm(member)}
-                      className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                      className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
                     >
                       Edit
                     </button>
@@ -817,7 +817,7 @@ export default function TeamSetupPage() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => openEditForm(member)}
-                            className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white hover:bg-blue-800"
+                            className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white hover:bg-sky-800"
                           >
                             Edit
                           </button>
@@ -1007,7 +1007,7 @@ export default function TeamSetupPage() {
                   <button
                     onClick={saveMember}
                     disabled={saving}
-                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    className="rounded-2xl bg-sky-700 px-4 py-3 font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
                   >
                     {saving
                       ? "Saving..."

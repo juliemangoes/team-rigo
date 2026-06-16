@@ -432,7 +432,7 @@ export default function ScrutineerPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
             Team Rigo
           </p>
 
@@ -448,7 +448,7 @@ export default function ScrutineerPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="w-full max-w-xl rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
             Team Rigo
           </p>
 
@@ -470,7 +470,7 @@ export default function ScrutineerPage() {
         <div className="mb-6 grid gap-6 lg:grid-cols-3">
           <section className="rounded-2xl bg-white p-6 shadow lg:col-span-2">
             <div className="mb-6">
-              <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+              <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
                 Team Rigo
               </p>
 
@@ -484,35 +484,35 @@ export default function ScrutineerPage() {
               </p>
             </div>
 
-            <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
-              <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+            <div className="mb-6 rounded-2xl border border-sky-100 bg-sky-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
                 Assigned Classroom
               </p>
 
               <div className="mt-3 grid gap-3 md:grid-cols-4">
                 <div>
-                  <p className="text-xs text-blue-700">Polling Area</p>
+                  <p className="text-xs text-sky-700">Polling Area</p>
                   <p className="text-lg font-bold text-slate-900">
                     {profile?.assigned_polling_area || "Not assigned"}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-blue-700">Classroom</p>
+                  <p className="text-xs text-sky-700">Classroom</p>
                   <p className="text-lg font-bold text-slate-900">
                     {profile?.assigned_classroom || "Not assigned"}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-blue-700">Surname Range</p>
+                  <p className="text-xs text-sky-700">Surname Range</p>
                   <p className="text-lg font-bold text-slate-900">
                     {profile?.surname_from || "?"} – {profile?.surname_to || "?"}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-blue-700">Scrutineer</p>
+                  <p className="text-xs text-sky-700">Scrutineer</p>
                   <p className="text-lg font-bold text-slate-900">
                     {profile?.full_name}
                   </p>
@@ -530,14 +530,14 @@ export default function ScrutineerPage() {
                   ref={searchRef}
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-5 py-4 text-xl font-semibold text-slate-900 outline-none focus:border-blue-700"
+                  className="w-full rounded-xl border border-slate-300 px-5 py-4 text-xl font-semibold text-slate-900 outline-none focus:border-sky-700"
                   placeholder="Reg no., surname, first name..."
                 />
 
                 <button
                   type="submit"
                   disabled={searching}
-                  className="rounded-xl bg-blue-700 px-8 py-4 text-lg font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  className="rounded-xl bg-sky-700 px-8 py-4 text-lg font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
                 >
                   {searching ? "Searching..." : "Search"}
                 </button>

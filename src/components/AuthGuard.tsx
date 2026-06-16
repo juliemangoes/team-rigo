@@ -145,7 +145,7 @@ export default function AuthGuard({
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
             Team Rigo
           </p>
           <h1 className="mt-3 text-2xl font-bold text-slate-900">
@@ -160,7 +160,7 @@ export default function AuthGuard({
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <div className="w-full max-w-lg rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
             Team Rigo
           </p>
 
@@ -178,7 +178,7 @@ export default function AuthGuard({
 
           <button
             onClick={logout}
-            className="mt-6 rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800"
+            className="mt-6 rounded-xl bg-sky-700 px-5 py-3 font-semibold text-white hover:bg-sky-800"
           >
             Back to Login
           </button>

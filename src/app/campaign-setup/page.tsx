@@ -114,7 +114,7 @@ function cleanNumber(value: string, fallback = 0) {
 
 function colorPill(color: string | null | undefined) {
   if (color === "green") return "bg-green-100 text-green-800";
-  if (color === "blue") return "bg-blue-100 text-blue-800";
+  if (color === "blue") return "bg-sky-100 text-sky-800";
   if (color === "amber") return "bg-amber-100 text-amber-800";
   if (color === "orange") return "bg-orange-100 text-orange-800";
   if (color === "red") return "bg-red-100 text-red-800";
@@ -216,7 +216,7 @@ function TextInput({
       type={type}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
       placeholder={placeholder}
     />
   );
@@ -235,7 +235,7 @@ function SelectInput({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
     >
       {children}
     </select>
@@ -684,7 +684,7 @@ export default function CampaignSetupPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-[2rem] bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading campaign setup...
             </h1>
@@ -780,14 +780,14 @@ export default function CampaignSetupPage() {
                       onClick={() => setActiveTab(section.id)}
                       className={`rounded-2xl px-4 py-3 text-left transition ${
                         active
-                          ? "bg-blue-700 text-white"
+                          ? "bg-sky-700 text-white"
                           : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       <p className="text-sm font-black">{section.shortTitle}</p>
                       <p
                         className={`mt-1 text-xs ${
-                          active ? "text-blue-100" : "text-slate-500"
+                          active ? "text-sky-100" : "text-slate-500"
                         }`}
                       >
                         {section.description}
@@ -801,7 +801,7 @@ export default function CampaignSetupPage() {
 
           <div className="min-w-0">
             {message && (
-              <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+              <div className="mb-5 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
                 {message}
               </div>
             )}
@@ -846,7 +846,7 @@ export default function CampaignSetupPage() {
                 <button
                   onClick={saveSettings}
                   disabled={savingSettings}
-                  className="mt-6 w-full rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 sm:w-auto"
+                  className="mt-6 w-full rounded-2xl bg-sky-700 px-5 py-3 font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300 sm:w-auto"
                 >
                   {savingSettings ? "Saving..." : "Save Victory Settings"}
                 </button>
@@ -895,7 +895,7 @@ export default function CampaignSetupPage() {
 
                   <button
                     onClick={addZone}
-                    className="mt-4 w-full rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 sm:w-auto"
+                    className="mt-4 w-full rounded-2xl bg-sky-700 px-5 py-3 font-black text-white hover:bg-sky-800 sm:w-auto"
                   >
                     Add Zone
                   </button>
@@ -984,7 +984,7 @@ export default function CampaignSetupPage() {
 
                   <button
                     onClick={addPollingArea}
-                    className="mt-4 w-full rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 sm:w-auto"
+                    className="mt-4 w-full rounded-2xl bg-sky-700 px-5 py-3 font-black text-white hover:bg-sky-800 sm:w-auto"
                   >
                     Add Polling Area
                   </button>
@@ -1167,7 +1167,7 @@ export default function CampaignSetupPage() {
                             <button
                               onClick={() => saveSupportStatusOption(option)}
                               disabled={savingSupportId === option.id}
-                              className="mt-4 w-full rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 sm:w-auto"
+                              className="mt-4 w-full rounded-2xl bg-sky-700 px-5 py-3 font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300 sm:w-auto"
                             >
                               {savingSupportId === option.id
                                 ? "Saving..."
@@ -1230,7 +1230,7 @@ export default function CampaignSetupPage() {
                   <button
                     onClick={saveOpponent}
                     disabled={savingOpponent}
-                    className="rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    className="rounded-2xl bg-sky-700 px-5 py-3 font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
                   >
                     {savingOpponent ? "Saving..." : "Save Opponent"}
                   </button>

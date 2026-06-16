@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+        <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
           Campaign Operations Platform
         </p>
 
@@ -18,7 +18,7 @@ export default function Home() {
 
         <Link
           href="/login"
-          className="mt-8 block w-full rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800"
+          className="mt-8 block w-full rounded-xl bg-sky-700 px-4 py-3 font-semibold text-white hover:bg-sky-800"
         >
           Sign In
         </Link>

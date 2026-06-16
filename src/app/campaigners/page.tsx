@@ -155,7 +155,7 @@ function supportPillClass(color: string | null | undefined, value?: string | nul
     return "bg-green-100 text-green-800";
   }
 
-  if (color === "blue") return "bg-blue-100 text-blue-800";
+  if (color === "blue") return "bg-sky-100 text-sky-800";
 
   if (color === "purple" || value === "Leaning Supporter") {
     return "bg-purple-100 text-purple-800";
@@ -181,7 +181,7 @@ function supportPillClass(color: string | null | undefined, value?: string | nul
 function pickupPillClass(value: string | null) {
   if (value === "Issue") return "bg-red-100 text-red-800";
   if (value === "Completed") return "bg-green-100 text-green-800";
-  if (value === "At Polling Station") return "bg-blue-100 text-blue-800";
+  if (value === "At Polling Station") return "bg-sky-100 text-sky-800";
   if (value === "Picked Up" || value === "On Route") {
     return "bg-purple-100 text-purple-800";
   }
@@ -212,7 +212,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-blue-100 bg-blue-50 text-blue-700"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -249,7 +249,7 @@ function SelectField({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
     >
       {children}
     </select>
@@ -583,7 +583,7 @@ export default function CampaignersPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading field view...
             </h1>
@@ -636,7 +636,7 @@ export default function CampaignersPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
               {message}
             </div>
           )}
@@ -694,7 +694,7 @@ export default function CampaignersPage() {
                     setSearch(event.target.value);
                     resetToFirstPage();
                   }}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
                   placeholder="Name, reg no., phone, street..."
                 />
               </div>
@@ -790,7 +790,7 @@ export default function CampaignersPage() {
               </div>
 
               {loadingVoters && (
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
                   Loading...
                 </span>
               )}

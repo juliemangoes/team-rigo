@@ -206,12 +206,12 @@ export default function Navigation() {
               className="flex min-w-0 items-center gap-3"
               aria-label="Go to Team Rigo home"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-700 text-sm font-black text-white shadow-sm">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-700 text-sm font-black text-white shadow-sm">
                 TR
               </div>
 
               <div className="min-w-0">
-                <p className="truncate text-sm font-black uppercase tracking-wide text-blue-700">
+                <p className="truncate text-sm font-black uppercase tracking-wide text-sky-700">
                   Team Rigo
                 </p>
                 <p className="hidden truncate text-xs text-slate-500 sm:block">
@@ -230,7 +230,7 @@ export default function Navigation() {
                     href={link.href}
                     className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
                       active
-                        ? "bg-blue-700 text-white shadow-sm"
+                        ? "bg-sky-700 text-white shadow-sm"
                         : "text-slate-700 hover:bg-slate-100"
                     }`}
                   >
@@ -291,7 +291,7 @@ export default function Navigation() {
             <div className="border-b border-slate-200 px-4 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-700 text-sm font-black text-white">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-700 text-sm font-black text-white">
                     TR
                   </div>
 
@@ -326,13 +326,13 @@ export default function Navigation() {
                       key={link.href}
                       href={link.href}
                       className={`flex items-center justify-between gap-4 px-4 py-4 transition ${
-                        active ? "bg-blue-50" : "hover:bg-slate-50"
+                        active ? "bg-sky-50" : "hover:bg-slate-50"
                       } first:rounded-t-3xl last:rounded-b-3xl`}
                     >
                       <div className="min-w-0">
                         <p
                           className={`truncate text-base font-black ${
-                            active ? "text-blue-700" : "text-slate-950"
+                            active ? "text-sky-700" : "text-slate-950"
                           }`}
                         >
                           {link.label}
@@ -345,7 +345,7 @@ export default function Navigation() {
 
                       <div className="flex shrink-0 items-center gap-2">
                         {active && (
-                          <span className="rounded-full bg-blue-700 px-2.5 py-1 text-xs font-black text-white">
+                          <span className="rounded-full bg-sky-700 px-2.5 py-1 text-xs font-black text-white">
                             Open
                           </span>
                         )}
