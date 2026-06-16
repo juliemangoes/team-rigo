@@ -201,38 +201,97 @@ function badgeClass(tone: string) {
 }
 
 function progressClass(tone: string) {
-  if (tone === "green") return "bg-green-400";
-  if (tone === "blue") return "bg-blue-400";
-  if (tone === "amber") return "bg-amber-400";
-  if (tone === "orange") return "bg-orange-400";
-  if (tone === "red") return "bg-red-400";
+  if (tone === "green") return "bg-green-500";
+  if (tone === "blue") return "bg-blue-500";
+  if (tone === "amber") return "bg-amber-500";
+  if (tone === "orange") return "bg-orange-500";
+  if (tone === "red") return "bg-red-500";
 
-  return "bg-slate-400";
+  return "bg-slate-500";
 }
 
-function dangerText(value: number) {
-  if (value > 0) return "text-red-700";
-  return "text-green-700";
+function textClass(tone: string) {
+  if (tone === "green") return "text-green-700";
+  if (tone === "blue") return "text-blue-700";
+  if (tone === "amber") return "text-amber-700";
+  if (tone === "orange") return "text-orange-700";
+  if (tone === "red") return "text-red-700";
+  if (tone === "purple") return "text-purple-700";
+
+  return "text-slate-700";
 }
 
-function ProgressBar({
-  value,
-  tone = "blue",
-}: {
-  value: number;
-  tone?: string;
-}) {
+function bgClass(tone: string) {
+  if (tone === "green") return "bg-green-50";
+  if (tone === "blue") return "bg-blue-50";
+  if (tone === "amber") return "bg-amber-50";
+  if (tone === "orange") return "bg-orange-50";
+  if (tone === "red") return "bg-red-50";
+  if (tone === "purple") return "bg-purple-50";
+
+  return "bg-slate-50";
+}
+
+function ProgressBar({ value, tone = "blue" }: { value: number; tone?: string }) {
   return (
-    <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
       <div
-        className={`h-3 rounded-full ${progressClass(tone)}`}
+        className={`h-2.5 rounded-full ${progressClass(tone)}`}
         style={{ width: `${clampPercentage(value)}%` }}
       />
     </div>
   );
 }
 
-function HeroMetric({
+function SectionHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <h2 className="break-words text-xl font-black text-slate-900 sm:text-2xl">
+          {title}
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+      </div>
+
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+function CompactMetric({
+  label,
+  value,
+  tone = "slate",
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  tone?: string;
+  detail?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-b-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-600">{label}</p>
+        {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
+      </div>
+
+      <p className={`shrink-0 text-xl font-black ${textClass(tone)}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function DesktopStatCard({
   title,
   value,
   subtitle,
@@ -243,83 +302,41 @@ function HeroMetric({
   subtitle: string;
   tone: string;
 }) {
-  const toneClasses =
-    tone === "green"
-      ? "border-green-400/30 bg-green-500/10 text-green-100"
-      : tone === "blue"
-      ? "border-blue-400/30 bg-blue-500/10 text-blue-100"
-      : tone === "amber"
-      ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
-      : tone === "purple"
-      ? "border-purple-400/30 bg-purple-500/10 text-purple-100"
-      : "border-white/10 bg-white/10 text-slate-100";
-
   return (
     <div
-      className={`min-w-0 rounded-3xl border p-5 shadow-xl sm:p-6 ${toneClasses}`}
+      className={`min-w-0 rounded-3xl border border-slate-200 p-5 shadow-sm ${bgClass(
+        tone
+      )}`}
     >
-      <p className="text-sm opacity-90">{title}</p>
-      <h2 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
+      <p className={`text-sm font-semibold ${textClass(tone)}`}>{title}</p>
+      <h3 className="mt-2 break-words text-4xl font-black text-slate-900">
         {value}
-      </h2>
-      <p className="mt-3 text-sm opacity-90">{subtitle}</p>
+      </h3>
+      <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
     </div>
   );
 }
 
-function RiskCard({
-  title,
-  value,
-  subtitle,
-  tone,
+function ActionChip({
+  href,
+  label,
+  primary,
 }: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  tone: "red" | "amber" | "orange" | "slate" | "purple" | "blue" | "green";
+  href: string;
+  label: string;
+  primary?: boolean;
 }) {
-  const colors = {
-    red: "bg-red-50 text-red-800",
-    amber: "bg-amber-50 text-amber-800",
-    orange: "bg-orange-50 text-orange-800",
-    slate: "bg-slate-50 text-slate-900",
-    purple: "bg-purple-50 text-purple-800",
-    blue: "bg-blue-50 text-blue-800",
-    green: "bg-green-50 text-green-800",
-  };
-
   return (
-    <div className={`min-w-0 rounded-2xl p-5 ${colors[tone]}`}>
-      <p className="text-sm opacity-90">{title}</p>
-      <h3 className="mt-2 break-words text-3xl font-black">{value}</h3>
-      <p className="mt-2 text-sm opacity-90">{subtitle}</p>
-    </div>
-  );
-}
-
-function SmallCountCard({
-  title,
-  value,
-  tone,
-}: {
-  title: string;
-  value: number;
-  tone: "slate" | "blue" | "green" | "amber" | "red" | "purple";
-}) {
-  const colors = {
-    slate: "bg-slate-50 text-slate-900",
-    blue: "bg-blue-50 text-blue-800",
-    green: "bg-green-50 text-green-800",
-    amber: "bg-amber-50 text-amber-800",
-    red: "bg-red-50 text-red-800",
-    purple: "bg-purple-50 text-purple-800",
-  };
-
-  return (
-    <div className={`rounded-2xl p-5 ${colors[tone]}`}>
-      <p className="text-sm opacity-90">{title}</p>
-      <h3 className="mt-2 text-3xl font-black">{formatNumber(value)}</h3>
-    </div>
+    <Link
+      href={href}
+      className={`shrink-0 rounded-full px-4 py-2 text-sm font-black ${
+        primary
+          ? "bg-blue-700 text-white"
+          : "border border-slate-200 bg-white text-slate-700"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -740,14 +757,14 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 p-4 sm:p-6">
+      <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl border border-white/10 bg-white/10 p-8 text-center shadow-xl sm:p-10">
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">
+          <div className="rounded-3xl bg-white p-6 text-center shadow">
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
               Team Rigo
             </p>
 
-            <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">
+            <h1 className="mt-3 text-xl font-bold text-slate-900">
               Loading path to victory...
             </h1>
           </div>
@@ -778,43 +795,43 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100">
-      <section className="bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+      <section className="bg-slate-950 px-4 py-4 text-white sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="flex min-w-0 flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 sm:gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
                 Team Rigo
               </p>
 
-              <h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
-                Dashboard
+              <h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:mt-3 sm:text-4xl md:text-5xl">
+                Path to Victory
               </h1>
 
-              <p className="mt-3 break-words text-xs text-slate-400 sm:text-sm">
-                {settings?.election_name || "Team Rigo Campaign"} · Logged in
-                as {profile?.full_name}
+              <p className="mt-2 max-w-3xl text-sm text-slate-300 sm:mt-3 sm:text-base">
+                {settings?.election_name || "Team Rigo Campaign"} ·{" "}
+                {profile?.full_name}
               </p>
             </div>
 
-            <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-3 xl:flex xl:flex-wrap">
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:w-auto sm:grid-cols-3 sm:overflow-visible sm:pb-0 xl:flex">
               <button
                 onClick={loadDashboard}
                 disabled={refreshing}
-                className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-black text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-5 sm:py-3"
               >
-                {refreshing ? "Refreshing..." : "Refresh"}
+                {refreshing ? "..." : "Refresh"}
               </button>
 
               <Link
                 href="/campaign-setup"
-                className="rounded-2xl border border-white/20 px-5 py-3 text-center text-sm font-bold text-white hover:bg-white/10"
+                className="shrink-0 rounded-full border border-white/20 px-4 py-2 text-center text-sm font-black text-white hover:bg-white/10 sm:rounded-2xl sm:px-5 sm:py-3"
               >
                 Setup
               </Link>
 
               <Link
                 href="/voters"
-                className="rounded-2xl bg-blue-600 px-5 py-3 text-center text-sm font-bold text-white hover:bg-blue-700"
+                className="shrink-0 rounded-full bg-blue-600 px-4 py-2 text-center text-sm font-black text-white hover:bg-blue-700 sm:rounded-2xl sm:px-5 sm:py-3"
               >
                 Voters
               </Link>
@@ -822,76 +839,100 @@ export default function DashboardPage() {
           </div>
 
           {message && (
-            <div className="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 p-4 text-sm font-semibold text-red-100">
+            <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm font-semibold text-red-100 sm:mt-6">
               {message}
             </div>
           )}
 
           {stats.target <= 0 && (
-            <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-sm font-semibold text-amber-100">
+            <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm font-semibold text-amber-100 sm:mt-6">
               Vote target is not set. Go to Campaign Setup and enter the Vote
               Target to Win.
             </div>
           )}
 
-          <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-            <div className="min-w-0 rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6 lg:col-span-2">
-              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm text-slate-300">Win Status</p>
+          <div className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-4 shadow-xl sm:mt-8 sm:p-6">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-300 sm:text-sm">
+                  Win Status
+                </p>
 
-                  <h2 className="mt-3 break-words text-4xl font-black sm:text-5xl">
-                    {stats.victoryStatus.label}
-                  </h2>
+                <h2 className="mt-1 break-words text-3xl font-black sm:mt-3 sm:text-5xl">
+                  {stats.victoryStatus.label}
+                </h2>
+              </div>
 
-                  <p className="mt-3 max-w-xl text-sm text-slate-300">
-                    {stats.victoryStatus.description}
-                  </p>
-                </div>
+              <span
+                className={`w-fit shrink-0 rounded-full px-3 py-1.5 text-xs font-black sm:px-4 sm:py-2 sm:text-sm ${badgeClass(
+                  stats.victoryStatus.tone
+                )}`}
+              >
+                {stats.projectedCushion >= 0
+                  ? `+${formatNumber(stats.projectedCushion)}`
+                  : `${formatNumber(stats.projectedCushion)}`}
+              </span>
+            </div>
 
-                <span
-                  className={`w-fit shrink-0 rounded-full px-4 py-2 text-sm font-black ${badgeClass(
-                    stats.victoryStatus.tone
-                  )}`}
-                >
-                  {stats.projectedCushion >= 0
-                    ? `+${formatNumber(stats.projectedCushion)}`
-                    : `${formatNumber(stats.projectedCushion)}`}{" "}
-                  projected
+            <p className="mt-2 text-sm text-slate-300 sm:mt-3">
+              {stats.victoryStatus.description}
+            </p>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-300">Projected</span>
+                <span className="font-black text-white">
+                  {formatNumber(stats.projectedVotes)} /{" "}
+                  {formatNumber(stats.target)}
                 </span>
               </div>
 
-              <div className="mt-6">
-                <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-slate-300">
-                    Projected Vote Strength
-                  </span>
-                  <span className="font-bold text-white">
-                    {formatNumber(stats.projectedVotes)} /{" "}
-                    {formatNumber(stats.target)}
-                  </span>
-                </div>
-
-                <div className="mt-3 h-4 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className={`h-4 rounded-full ${progressClass(
-                      stats.victoryStatus.tone
-                    )}`}
-                    style={{
-                      width: `${clampPercentage(stats.targetProgress)}%`,
-                    }}
-                  />
-                </div>
-
-                <p className="mt-3 text-xs text-slate-400">
-                  Projection uses confirmed supporters plus 50% of leaning
-                  supporters. This is an estimate, not a record of how anyone
-                  voted.
-                </p>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10 sm:h-4">
+                <div
+                  className={`h-3 rounded-full sm:h-4 ${progressClass(
+                    stats.victoryStatus.tone
+                  )}`}
+                  style={{
+                    width: `${clampPercentage(stats.targetProgress)}%`,
+                  }}
+                />
               </div>
             </div>
 
-            <HeroMetric
+            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
+              <CompactMetric
+                label="Confirmed"
+                value={formatNumber(stats.confirmed)}
+                tone="green"
+              />
+
+              <CompactMetric
+                label="Need"
+                value={formatNumber(stats.votesNeededFromProjected)}
+                tone={stats.votesNeededFromProjected > 0 ? "red" : "green"}
+              />
+
+              <CompactMetric
+                label="Leaning"
+                value={formatNumber(stats.leaning)}
+                tone="purple"
+              />
+
+              <CompactMetric
+                label="Not Voted"
+                value={formatNumber(stats.confirmedNotVoted)}
+                tone="amber"
+              />
+            </div>
+
+            <p className="mt-3 hidden text-xs text-slate-400 sm:block">
+              Projection uses confirmed supporters plus 50% of leaning
+              supporters. This is an estimate, not a record of how anyone voted.
+            </p>
+          </div>
+
+          <div className="mt-4 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+            <DesktopStatCard
               title="Confirmed Supporters"
               value={formatNumber(stats.confirmed)}
               tone="green"
@@ -904,7 +945,7 @@ export default function DashboardPage() {
               }
             />
 
-            <HeroMetric
+            <DesktopStatCard
               title="Projected Votes"
               value={formatNumber(stats.projectedVotes)}
               tone="blue"
@@ -916,99 +957,124 @@ export default function DashboardPage() {
                   : "Projection meets the target"
               }
             />
-          </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <HeroMetric
-              title="Vote Target to Win"
+            <DesktopStatCard
+              title="Vote Target"
               value={formatNumber(stats.target)}
               tone="slate"
               subtitle="Set by Campaign Manager."
             />
 
-            <HeroMetric
-              title="Leaning Supporters"
-              value={formatNumber(stats.leaning)}
-              tone="purple"
-              subtitle="Counted as 50% in projection."
-            />
-
-            <HeroMetric
-              title="Confirmed Not Yet Voted"
+            <DesktopStatCard
+              title="Confirmed Not Voted"
               value={formatNumber(stats.confirmedNotVoted)}
               tone="amber"
               subtitle="Key turnout follow-up group."
-            />
-
-            <HeroMetric
-              title="Confirmed Voted"
-              value={formatNumber(stats.confirmedVoted)}
-              tone="green"
-              subtitle={`${stats.confirmedTurnoutRate}% of confirmed supporters voted.`}
             />
           </div>
         </div>
       </section>
 
-      <section className="px-4 py-6 sm:px-6 sm:py-8">
+      <section className="px-4 py-4 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="grid gap-6 xl:grid-cols-3">
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6 xl:col-span-2">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <h2 className="break-words text-2xl font-black text-slate-900">
-                    Victory Risk Indicators
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    These numbers show where the campaign may be losing ground.
-                  </p>
-                </div>
+          <div className="mb-4 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:hidden sm:px-0">
+            <ActionChip href="/voters" label="Voters" primary />
+            <ActionChip href="/campaigners" label="Field" />
+            <ActionChip href="/team" label="Team" />
+            <ActionChip href="/upload" label="Upload" />
+            <ActionChip href="/campaign-setup" label="Setup" />
+          </div>
 
-                <Link
-                  href="/reports"
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50"
-                >
-                  View Reports
-                </Link>
+          <div className="grid gap-4 xl:grid-cols-3 xl:gap-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6 xl:col-span-2">
+              <SectionHeader
+                title="Risk Snapshot"
+                subtitle="Compact view of what needs attention."
+                action={
+                  <Link
+                    href="/reports"
+                    className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
+                  >
+                    View Reports
+                  </Link>
+                }
+              />
+
+              <div className="mt-3 divide-y divide-slate-100 sm:hidden">
+                <CompactMetric
+                  label="Unassigned Voters"
+                  value={formatNumber(stats.unassigned)}
+                  tone={stats.unassigned > 0 ? "red" : "green"}
+                />
+
+                <CompactMetric
+                  label="Pickup Issues"
+                  value={formatNumber(stats.pickupIssues)}
+                  tone={stats.pickupIssues > 0 ? "red" : "green"}
+                />
+
+                <CompactMetric
+                  label="Pickup Not Voted"
+                  value={formatNumber(stats.confirmedPickupNotVoted)}
+                  tone="orange"
+                />
+
+                <CompactMetric
+                  label="Unknown Status"
+                  value={formatNumber(stats.unknown)}
+                  tone="slate"
+                />
+
+                <CompactMetric
+                  label="Undecided"
+                  value={formatNumber(stats.undecided)}
+                  tone="purple"
+                />
+
+                <CompactMetric
+                  label="Assignment"
+                  value={`${stats.assignmentRate}%`}
+                  tone="blue"
+                />
               </div>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <RiskCard
+              <div className="mt-6 hidden gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+                <DesktopStatCard
                   title="Unassigned Voters"
                   value={formatNumber(stats.unassigned)}
                   subtitle="Not assigned to a campaigner."
                   tone="red"
                 />
 
-                <RiskCard
+                <DesktopStatCard
                   title="Pickup Issues"
                   value={formatNumber(stats.pickupIssues)}
                   subtitle="Requires immediate attention."
                   tone="amber"
                 />
 
-                <RiskCard
-                  title="Confirmed Pickup Not Voted"
+                <DesktopStatCard
+                  title="Pickup Not Voted"
                   value={formatNumber(stats.confirmedPickupNotVoted)}
                   subtitle="Confirmed supporters needing transport."
                   tone="orange"
                 />
 
-                <RiskCard
+                <DesktopStatCard
                   title="Unknown Status"
                   value={formatNumber(stats.unknown)}
                   subtitle="Needs classification."
                   tone="slate"
                 />
 
-                <RiskCard
+                <DesktopStatCard
                   title="Undecided"
                   value={formatNumber(stats.undecided)}
                   subtitle="Not counted in projection."
                   tone="purple"
                 />
 
-                <RiskCard
+                <DesktopStatCard
                   title="Assignment Coverage"
                   value={`${stats.assignmentRate}%`}
                   subtitle={`${formatNumber(stats.assigned)} assigned of ${formatNumber(
@@ -1019,7 +1085,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+            <section className="hidden rounded-3xl bg-white p-5 shadow sm:block sm:p-6">
               <h2 className="text-2xl font-black text-slate-900">
                 Quick Actions
               </h2>
@@ -1048,98 +1114,74 @@ export default function DashboardPage() {
             </section>
           </div>
 
-          <section className="mt-6 rounded-3xl bg-white p-5 shadow sm:p-6">
-            <div className="min-w-0">
-              <h2 className="break-words text-2xl font-black text-slate-900">
-                Zone Battle Map
-              </h2>
+          <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
+            <SectionHeader
+              title="Zone Battle Map"
+              subtitle="Where support, turnout, and pickup risks are located."
+            />
 
-              <p className="mt-1 text-sm text-slate-500">
-                Shows which zones are carrying the campaign and where turnout or
-                pickup risks exist.
-              </p>
-            </div>
-
-            <div className="mt-6 grid gap-4 lg:hidden">
+            <div className="mt-4 grid gap-3 lg:hidden">
               {zoneSummary.map((item) => (
                 <div
                   key={item.zone}
-                  className="min-w-0 rounded-2xl border border-slate-200 p-4"
+                  className="min-w-0 rounded-2xl border border-slate-200 p-3"
                 >
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="break-words text-xl font-black text-slate-900">
+                      <h3 className="break-words text-base font-black text-slate-900">
                         {item.zone}
                       </h3>
-                      <p className="text-sm text-slate-500">
-                        Total voters: {formatNumber(item.total)}
+                      <p className="text-xs text-slate-500">
+                        Total: {formatNumber(item.total)}
                       </p>
                     </div>
 
                     <span
-                      className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                      className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${
                         item.pickupIssues > 0
                           ? "bg-red-100 text-red-800"
                           : "bg-green-100 text-green-800"
                       }`}
                     >
-                      {item.pickupIssues > 0
-                        ? `${item.pickupIssues} issue(s)`
-                        : "No issues"}
+                      {item.pickupIssues > 0 ? `${item.pickupIssues} issue` : "OK"}
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-green-50 p-3">
-                      <p className="text-xs font-semibold text-green-700">
-                        Confirmed
+                  <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Conf.
                       </p>
-                      <p className="mt-1 text-2xl font-black text-green-800">
+                      <p className="text-lg font-black text-green-700">
                         {formatNumber(item.confirmed)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-purple-50 p-3">
-                      <p className="text-xs font-semibold text-purple-700">
-                        Leaning
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Proj.
                       </p>
-                      <p className="mt-1 text-2xl font-black text-purple-800">
-                        {formatNumber(item.leaning)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-blue-50 p-3">
-                      <p className="text-xs font-semibold text-blue-700">
-                        Projected
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-blue-800">
+                      <p className="text-lg font-black text-blue-700">
                         {formatNumber(item.projected)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-amber-50 p-3">
-                      <p className="text-xs font-semibold text-amber-700">
-                        Remaining
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Rem.
                       </p>
-                      <p className="mt-1 text-2xl font-black text-amber-800">
+                      <p className="text-lg font-black text-amber-700">
                         {formatNumber(item.confirmedRemaining)}
                       </p>
                     </div>
-                  </div>
 
-                  <div className="mt-4 grid gap-2 text-sm text-slate-700">
-                    <div className="flex justify-between gap-4">
-                      <span>Confirmed Voted</span>
-                      <span className="font-bold">
-                        {formatNumber(item.confirmedVoted)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between gap-4">
-                      <span>Pickup Needed</span>
-                      <span className="font-bold text-orange-700">
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Pick.
+                      </p>
+                      <p className="text-lg font-black text-orange-700">
                         {formatNumber(item.pickupNeeded)}
-                      </span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1232,43 +1274,39 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
-              <h2 className="text-2xl font-black text-slate-900">
-                Polling Area Watch
-              </h2>
+          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
+              <SectionHeader
+                title="Polling Areas"
+                subtitle="Turnout and pickup needs by polling area."
+              />
 
-              <p className="mt-1 text-sm text-slate-500">
-                Confirmed supporters, turnout, and pickup needs by polling
-                area.
-              </p>
-
-              <div className="mt-6 space-y-4">
+              <div className="mt-4 space-y-3 sm:mt-6 sm:space-y-4">
                 {pollingSummary.map((item) => {
                   const turnout = percentage(item.voted, item.total);
 
                   return (
                     <div
                       key={item.pollingArea}
-                      className="rounded-2xl border border-slate-200 p-4"
+                      className="rounded-2xl border border-slate-200 p-3 sm:p-4"
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="break-words font-black text-slate-900">
-                            Polling Area {item.pollingArea}
+                          <p className="truncate font-black text-slate-900">
+                            Polling {item.pollingArea}
                           </p>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-xs text-slate-500 sm:text-sm">
                             {formatNumber(item.confirmed)} confirmed ·{" "}
-                            {formatNumber(item.pickupNeeded)} pickup needed
+                            {formatNumber(item.pickupNeeded)} pickup
                           </p>
                         </div>
 
-                        <p className="text-2xl font-black text-green-700">
+                        <p className="shrink-0 text-xl font-black text-green-700 sm:text-2xl">
                           {turnout}%
                         </p>
                       </div>
 
-                      <div className="mt-3">
+                      <div className="mt-2 sm:mt-3">
                         <ProgressBar value={turnout} tone="green" />
                       </div>
                     </div>
@@ -1283,41 +1321,36 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
-              <h2 className="text-2xl font-black text-slate-900">
-                Campaigner Contribution
-              </h2>
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
+              <SectionHeader
+                title="Campaigners"
+                subtitle="Ranked by confirmed supporters assigned."
+              />
 
-              <p className="mt-1 text-sm text-slate-500">
-                Campaigners ranked by confirmed supporters assigned.
-              </p>
-
-              <div className="mt-6 space-y-3">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {campaignerSummary.map((item, index) => (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-slate-200 p-4"
+                    className="rounded-2xl border border-slate-200 p-3 sm:p-4"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="break-words font-black text-slate-900">
+                        <p className="truncate font-black text-slate-900">
                           {index + 1}. {item.name}
                         </p>
-                        <p className="text-sm text-slate-500">
-                          {item.zone || "No zone assigned"}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {formatNumber(item.votedConfirmed)} confirmed voted ·{" "}
-                          {formatNumber(item.pickupNeeded)} pickup needed
+                        <p className="text-xs text-slate-500 sm:text-sm">
+                          {item.zone || "No zone"} ·{" "}
+                          {formatNumber(item.votedConfirmed)} voted ·{" "}
+                          {formatNumber(item.pickupNeeded)} pickup
                         </p>
                       </div>
 
-                      <div className="w-full rounded-2xl bg-blue-50 px-4 py-2 text-left sm:w-auto sm:text-right">
-                        <p className="text-2xl font-black text-blue-800">
+                      <div className="shrink-0 rounded-2xl bg-blue-50 px-3 py-2 text-right">
+                        <p className="text-xl font-black text-blue-800">
                           {formatNumber(item.confirmed)}
                         </p>
-                        <p className="text-xs font-bold text-blue-700">
-                          Confirmed
+                        <p className="text-[10px] font-bold uppercase text-blue-700">
+                          Conf.
                         </p>
                       </div>
                     </div>
@@ -1333,56 +1366,44 @@ export default function DashboardPage() {
             </section>
           </div>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900">
-                    Pickup Issues
-                  </h2>
+          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
+              <SectionHeader
+                title="Pickup Issues"
+                subtitle="Voters currently marked with pickup issues."
+                action={
+                  <Link
+                    href="/campaigners"
+                    className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
+                  >
+                    Open Field View
+                  </Link>
+                }
+              />
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    Voters currently marked with pickup issues.
-                  </p>
-                </div>
-
-                <Link
-                  href="/campaigners"
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50"
-                >
-                  Open Field View
-                </Link>
-              </div>
-
-              <div className="mt-6 space-y-3">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {issueVoters.map((voter) => (
                   <div
                     key={voter.id}
-                    className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
+                    className="rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4"
                   >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
                           {getRegNo(voter)}
                         </p>
 
-                        <p className="mt-1 break-words text-lg font-black text-slate-900">
+                        <p className="mt-1 truncate text-base font-black text-slate-900 sm:text-lg">
                           {getDisplayName(voter)}
                         </p>
 
-                        <p className="mt-1 text-sm text-slate-600">
+                        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
                           Zone: {voter.zone || "No zone"} · Polling:{" "}
                           {voter.polling_area || "No polling area"}
                         </p>
-
-                        {voter.notes && (
-                          <p className="mt-2 break-words text-sm text-amber-900">
-                            {voter.notes}
-                          </p>
-                        )}
                       </div>
 
-                      <span className="w-fit shrink-0 rounded-full bg-amber-200 px-3 py-1 text-xs font-black text-amber-900">
+                      <span className="w-fit shrink-0 rounded-full bg-amber-200 px-2.5 py-1 text-[11px] font-black text-amber-900">
                         Issue
                       </span>
                     </div>
@@ -1390,58 +1411,42 @@ export default function DashboardPage() {
                 ))}
 
                 {issueVoters.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No pickup issues at this time.
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
-              <h2 className="text-2xl font-black text-slate-900">
-                Team Structure
-              </h2>
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
+              <SectionHeader
+                title="Team"
+                subtitle="Active team members by role."
+              />
 
-              <p className="mt-1 text-sm text-slate-500">
-                Active team members by role.
-              </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <SmallCountCard
-                  title="Total Team"
-                  value={teamStats.total}
-                  tone="slate"
-                />
-
-                <SmallCountCard
-                  title="Zone Leaders"
-                  value={teamStats.zoneLeaders}
-                  tone="purple"
-                />
-
-                <SmallCountCard
-                  title="Campaigners"
-                  value={teamStats.campaigners}
-                  tone="green"
-                />
-
-                <SmallCountCard
-                  title="Drivers"
-                  value={teamStats.drivers}
-                  tone="amber"
-                />
-
-                <SmallCountCard
-                  title="Scrutineers"
-                  value={teamStats.scrutineers}
-                  tone="red"
-                />
-
-                <SmallCountCard
-                  title="Managers"
-                  value={teamStats.managers}
-                  tone="blue"
-                />
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-6 sm:grid-cols-2 sm:gap-4">
+                {[
+                  ["Total", teamStats.total, "slate"],
+                  ["Leaders", teamStats.zoneLeaders, "purple"],
+                  ["Field", teamStats.campaigners, "green"],
+                  ["Drivers", teamStats.drivers, "amber"],
+                  ["Scrut.", teamStats.scrutineers, "red"],
+                  ["Mgrs.", teamStats.managers, "blue"],
+                ].map(([label, value, tone]) => (
+                  <div
+                    key={label as string}
+                    className={`rounded-2xl p-3 text-center sm:p-5 ${bgClass(
+                      tone as string
+                    )}`}
+                  >
+                    <p className={`text-xs font-bold ${textClass(tone as string)}`}>
+                      {label}
+                    </p>
+                    <h3 className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+                      {formatNumber(value as number)}
+                    </h3>
+                  </div>
+                ))}
               </div>
             </section>
           </div>

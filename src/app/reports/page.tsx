@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -91,17 +92,7 @@ type CampaignerReport = {
   pickupIssues: number;
 };
 
-type SupportReport = {
-  status: string;
-  total: number;
-  percentage: number;
-};
-
-type PickupReport = {
-  status: string;
-  total: number;
-  percentage: number;
-};
+type Tone = "slate" | "blue" | "green" | "amber" | "red" | "purple" | "orange";
 
 const supportOrder = [
   "Confirmed Supporter",
@@ -167,7 +158,7 @@ function getVictoryStatus(projectedVotes: number, confirmed: number, target: num
   if (!target || target <= 0) {
     return {
       label: "Set Target",
-      tone: "slate",
+      tone: "slate" as Tone,
       description: "Add a vote target in Campaign Setup.",
     };
   }
@@ -178,7 +169,7 @@ function getVictoryStatus(projectedVotes: number, confirmed: number, target: num
   if (confirmedRate >= 1) {
     return {
       label: "Strong Position",
-      tone: "green",
+      tone: "green" as Tone,
       description: "Confirmed supporters meet or exceed the target.",
     };
   }
@@ -186,7 +177,7 @@ function getVictoryStatus(projectedVotes: number, confirmed: number, target: num
   if (projectedRate >= 1.15) {
     return {
       label: "Strong Lead",
-      tone: "green",
+      tone: "green" as Tone,
       description: "Projected vote strength is comfortably above target.",
     };
   }
@@ -194,7 +185,7 @@ function getVictoryStatus(projectedVotes: number, confirmed: number, target: num
   if (projectedRate >= 1) {
     return {
       label: "On Track",
-      tone: "blue",
+      tone: "blue" as Tone,
       description: "Projected vote strength meets the target.",
     };
   }
@@ -202,7 +193,7 @@ function getVictoryStatus(projectedVotes: number, confirmed: number, target: num
   if (projectedRate >= 0.9) {
     return {
       label: "Close Race",
-      tone: "amber",
+      tone: "amber" as Tone,
       description: "Projected vote strength is close but below target.",
     };
   }
@@ -210,34 +201,69 @@ function getVictoryStatus(projectedVotes: number, confirmed: number, target: num
   if (projectedRate >= 0.75) {
     return {
       label: "At Risk",
-      tone: "orange",
+      tone: "orange" as Tone,
       description: "More confirmed supporters are needed.",
     };
   }
 
   return {
     label: "Critical Gap",
-    tone: "red",
+    tone: "red" as Tone,
     description: "Confirmed and projected support are far below target.",
   };
 }
 
-function badgeClass(tone: string) {
+function textClass(tone: Tone | string) {
+  if (tone === "green") return "text-green-700";
+  if (tone === "blue") return "text-blue-700";
+  if (tone === "amber") return "text-amber-700";
+  if (tone === "orange") return "text-orange-700";
+  if (tone === "red") return "text-red-700";
+  if (tone === "purple") return "text-purple-700";
+
+  return "text-slate-700";
+}
+
+function bgClass(tone: Tone | string) {
+  if (tone === "green") return "bg-green-50";
+  if (tone === "blue") return "bg-blue-50";
+  if (tone === "amber") return "bg-amber-50";
+  if (tone === "orange") return "bg-orange-50";
+  if (tone === "red") return "bg-red-50";
+  if (tone === "purple") return "bg-purple-50";
+
+  return "bg-slate-50";
+}
+
+function borderClass(tone: Tone | string) {
+  if (tone === "green") return "border-green-100";
+  if (tone === "blue") return "border-blue-100";
+  if (tone === "amber") return "border-amber-100";
+  if (tone === "orange") return "border-orange-100";
+  if (tone === "red") return "border-red-100";
+  if (tone === "purple") return "border-purple-100";
+
+  return "border-slate-200";
+}
+
+function badgeClass(tone: Tone | string) {
   if (tone === "green") return "bg-green-100 text-green-800";
   if (tone === "blue") return "bg-blue-100 text-blue-800";
   if (tone === "amber") return "bg-amber-100 text-amber-800";
   if (tone === "orange") return "bg-orange-100 text-orange-800";
   if (tone === "red") return "bg-red-100 text-red-800";
+  if (tone === "purple") return "bg-purple-100 text-purple-800";
 
   return "bg-slate-100 text-slate-800";
 }
 
-function progressClass(tone: string) {
+function progressClass(tone: Tone | string) {
   if (tone === "green") return "bg-green-600";
   if (tone === "blue") return "bg-blue-600";
   if (tone === "amber") return "bg-amber-500";
   if (tone === "orange") return "bg-orange-500";
   if (tone === "red") return "bg-red-600";
+  if (tone === "purple") return "bg-purple-600";
 
   return "bg-slate-600";
 }
@@ -285,51 +311,13 @@ function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   URL.revokeObjectURL(url);
 }
 
-function ProgressBar({
-  value,
-  tone = "blue",
-}: {
-  value: number;
-  tone?: string;
-}) {
+function ProgressBar({ value, tone = "blue" }: { value: number; tone?: Tone | string }) {
   return (
-    <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
       <div
-        className={`h-3 rounded-full ${progressClass(tone)}`}
+        className={`h-2.5 rounded-full ${progressClass(tone)}`}
         style={{ width: `${clampPercentage(value)}%` }}
       />
-    </div>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  subtitle,
-  tone,
-}: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  tone: "slate" | "blue" | "green" | "amber" | "red" | "purple" | "orange";
-}) {
-  const colors = {
-    slate: "bg-white text-slate-900 border-slate-200",
-    blue: "bg-blue-50 text-blue-900 border-blue-100",
-    green: "bg-green-50 text-green-900 border-green-100",
-    amber: "bg-amber-50 text-amber-900 border-amber-100",
-    red: "bg-red-50 text-red-900 border-red-100",
-    purple: "bg-purple-50 text-purple-900 border-purple-100",
-    orange: "bg-orange-50 text-orange-900 border-orange-100",
-  };
-
-  return (
-    <div className={`min-w-0 rounded-3xl border p-5 shadow-sm ${colors[tone]}`}>
-      <p className="text-sm opacity-80">{title}</p>
-      <h3 className="mt-2 break-words text-3xl font-black sm:text-4xl">
-        {value}
-      </h3>
-      <p className="mt-2 text-sm opacity-80">{subtitle}</p>
     </div>
   );
 }
@@ -341,12 +329,12 @@ function SectionHeader({
 }: {
   title: string;
   subtitle: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h2 className="break-words text-2xl font-black text-slate-900">
+        <h2 className="break-words text-xl font-black text-slate-900 sm:text-2xl">
           {title}
         </h2>
         <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
@@ -354,6 +342,113 @@ function SectionHeader({
 
       {action && <div className="shrink-0">{action}</div>}
     </div>
+  );
+}
+
+function CompactMetric({
+  label,
+  value,
+  tone = "slate",
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  tone?: Tone;
+  detail?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-b-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-600">{label}</p>
+        {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
+      </div>
+
+      <p className={`shrink-0 text-xl font-black ${textClass(tone)}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function DesktopStatCard({
+  title,
+  value,
+  subtitle,
+  tone,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  tone: Tone;
+}) {
+  return (
+    <div
+      className={`min-w-0 rounded-3xl border p-5 shadow-sm ${bgClass(
+        tone
+      )} ${borderClass(tone)}`}
+    >
+      <p className={`text-sm font-semibold ${textClass(tone)}`}>{title}</p>
+      <h3 className="mt-2 break-words text-4xl font-black text-slate-900">
+        {value}
+      </h3>
+      <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+    </div>
+  );
+}
+
+function ReportRow({
+  label,
+  value,
+  percent,
+  tone,
+}: {
+  label: string;
+  value: number;
+  percent: number;
+  tone: Tone;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-black text-slate-900">{label}</p>
+          <p className="text-xs text-slate-500 sm:text-sm">
+            {formatNumber(value)} voters
+          </p>
+        </div>
+
+        <p className={`shrink-0 text-xl font-black sm:text-2xl ${textClass(tone)}`}>
+          {percent}%
+        </p>
+      </div>
+
+      <div className="mt-2 sm:mt-3">
+        <ProgressBar value={percent} tone={tone} />
+      </div>
+    </div>
+  );
+}
+
+function ExportChip({
+  label,
+  onClick,
+  primary,
+}: {
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-4 py-2 text-sm font-black ${
+        primary
+          ? "bg-blue-700 text-white"
+          : "border border-slate-200 bg-white text-slate-700"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -507,8 +602,6 @@ export default function ReportsPage() {
       (voter) => getSupportStatus(voter) === "Unknown"
     ).length;
 
-    const pickupNeeded = voters.filter((voter) => voter.pickup_needed).length;
-
     const pickupIssues = voters.filter(
       (voter) => getPickupStatus(voter) === "Issue"
     ).length;
@@ -542,7 +635,6 @@ export default function ReportsPage() {
       leaning,
       undecided,
       unknown,
-      pickupNeeded,
       pickupIssues,
       voted,
       confirmedVoted,
@@ -870,12 +962,12 @@ export default function ReportsPage() {
     return (
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl bg-white p-8 text-center shadow">
+          <div className="rounded-3xl bg-white p-6 text-center shadow">
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
               Team Rigo
             </p>
 
-            <h1 className="mt-3 text-2xl font-bold text-slate-900">
+            <h1 className="mt-3 text-xl font-bold text-slate-900">
               Loading reports...
             </h1>
           </div>
@@ -906,260 +998,318 @@ export default function ReportsPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100">
-      <section className="bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+      <section className="bg-slate-950 px-4 py-4 text-white sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="flex min-w-0 flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 sm:gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
                 Team Rigo
               </p>
 
-              <h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
+              <h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:mt-3 sm:text-4xl md:text-5xl">
                 Campaign Reports
               </h1>
 
-              <p className="mt-3 max-w-3xl text-sm text-slate-300 sm:text-base">
-                Review campaign performance by vote target, support status,
-                zones, polling areas, campaigners, pickup needs, and turnout.
-              </p>
-
-              <p className="mt-3 break-words text-xs text-slate-400 sm:text-sm">
-                {settings?.election_name || "Team Rigo Campaign"} · Logged in
-                as {profile?.full_name}
+              <p className="mt-2 max-w-3xl text-sm text-slate-300 sm:mt-3 sm:text-base">
+                {settings?.election_name || "Team Rigo Campaign"} ·{" "}
+                {profile?.full_name}
               </p>
             </div>
 
-            <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-3 xl:flex xl:flex-wrap">
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:w-auto sm:grid-cols-3 sm:overflow-visible sm:pb-0 xl:flex">
               <button
                 onClick={loadReports}
                 disabled={refreshing}
-                className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-black text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-5 sm:py-3"
               >
-                {refreshing ? "Refreshing..." : "Refresh"}
+                {refreshing ? "..." : "Refresh"}
               </button>
 
               <Link
                 href="/dashboard"
-                className="rounded-2xl border border-white/20 px-5 py-3 text-center text-sm font-bold text-white hover:bg-white/10"
+                className="shrink-0 rounded-full border border-white/20 px-4 py-2 text-center text-sm font-black text-white hover:bg-white/10 sm:rounded-2xl sm:px-5 sm:py-3"
               >
                 Dashboard
               </Link>
 
               <button
                 onClick={exportFullVoterReport}
-                className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
+                className="shrink-0 rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 sm:rounded-2xl sm:px-5 sm:py-3"
               >
-                Export Voters
+                Export
               </button>
             </div>
           </div>
 
           {message && (
-            <div className="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 p-4 text-sm font-semibold text-red-100">
+            <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm font-semibold text-red-100 sm:mt-6">
               {message}
             </div>
           )}
 
-          <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-            <div className="min-w-0 rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6 lg:col-span-2">
-              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm text-slate-300">Victory Report</p>
+          <div className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-4 shadow-xl sm:mt-8 sm:p-6">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-300 sm:text-sm">
+                  Victory Report
+                </p>
 
-                  <h2 className="mt-3 break-words text-4xl font-black sm:text-5xl">
-                    {stats.victoryStatus.label}
-                  </h2>
+                <h2 className="mt-1 break-words text-3xl font-black sm:mt-3 sm:text-5xl">
+                  {stats.victoryStatus.label}
+                </h2>
+              </div>
 
-                  <p className="mt-3 max-w-xl text-sm text-slate-300">
-                    {stats.victoryStatus.description}
-                  </p>
-                </div>
+              <span
+                className={`w-fit shrink-0 rounded-full px-3 py-1.5 text-xs font-black sm:px-4 sm:py-2 sm:text-sm ${badgeClass(
+                  stats.victoryStatus.tone
+                )}`}
+              >
+                {stats.projectedCushion >= 0
+                  ? `+${formatNumber(stats.projectedCushion)}`
+                  : `${formatNumber(stats.projectedCushion)}`}
+              </span>
+            </div>
 
-                <span
-                  className={`w-fit shrink-0 rounded-full px-4 py-2 text-sm font-black ${badgeClass(
-                    stats.victoryStatus.tone
-                  )}`}
-                >
-                  {stats.projectedCushion >= 0
-                    ? `+${formatNumber(stats.projectedCushion)}`
-                    : `${formatNumber(stats.projectedCushion)}`}{" "}
-                  projected
+            <p className="mt-2 text-sm text-slate-300 sm:mt-3">
+              {stats.victoryStatus.description}
+            </p>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-300">Projected</span>
+                <span className="font-black text-white">
+                  {formatNumber(stats.projectedVotes)} /{" "}
+                  {formatNumber(stats.target)}
                 </span>
               </div>
 
-              <div className="mt-6">
-                <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-slate-300">
-                    Projected Vote Strength
-                  </span>
-                  <span className="font-bold text-white">
-                    {formatNumber(stats.projectedVotes)} /{" "}
-                    {formatNumber(stats.target)}
-                  </span>
-                </div>
-
-                <div className="mt-3 h-4 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className={`h-4 rounded-full ${progressClass(
-                      stats.victoryStatus.tone
-                    )}`}
-                    style={{
-                      width: `${clampPercentage(stats.targetProgress)}%`,
-                    }}
-                  />
-                </div>
-
-                <p className="mt-3 text-xs text-slate-400">
-                  Projection uses confirmed supporters plus 50% of leaning
-                  supporters. This is an estimate, not a record of how anyone
-                  voted.
-                </p>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10 sm:h-4">
+                <div
+                  className={`h-3 rounded-full sm:h-4 ${progressClass(
+                    stats.victoryStatus.tone
+                  )}`}
+                  style={{
+                    width: `${clampPercentage(stats.targetProgress)}%`,
+                  }}
+                />
               </div>
             </div>
 
-            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-green-200">Confirmed Supporters</p>
-              <h2 className="mt-3 text-4xl font-black sm:text-5xl">
-                {formatNumber(stats.confirmed)}
-              </h2>
-              <p className="mt-3 text-sm text-green-100">
-                {formatNumber(stats.votesNeededFromConfirmed)} more confirmed
-                needed.
-              </p>
+            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
+              <CompactMetric
+                label="Confirmed"
+                value={formatNumber(stats.confirmed)}
+                tone="green"
+              />
+
+              <CompactMetric
+                label="Projected Need"
+                value={formatNumber(stats.votesNeededFromProjected)}
+                tone={stats.votesNeededFromProjected > 0 ? "red" : "green"}
+              />
+
+              <CompactMetric
+                label="Not Voted"
+                value={formatNumber(stats.confirmedNotVoted)}
+                tone="amber"
+              />
+
+              <CompactMetric
+                label="Pickup Risk"
+                value={formatNumber(stats.confirmedPickupNotVoted)}
+                tone="orange"
+              />
             </div>
 
-            <div className="rounded-3xl border border-blue-400/30 bg-blue-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-blue-200">Projected Votes</p>
-              <h2 className="mt-3 text-4xl font-black sm:text-5xl">
-                {formatNumber(stats.projectedVotes)}
-              </h2>
-              <p className="mt-3 text-sm text-blue-100">
-                {formatNumber(stats.votesNeededFromProjected)} projected votes
-                short.
-              </p>
-            </div>
+            <p className="mt-3 hidden text-xs text-slate-400 sm:block">
+              Projection uses confirmed supporters plus 50% of leaning
+              supporters. This is an estimate, not a record of how anyone voted.
+            </p>
+          </div>
+
+          <div className="mt-4 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+            <DesktopStatCard
+              title="Confirmed Supporters"
+              value={formatNumber(stats.confirmed)}
+              tone="green"
+              subtitle={`${formatNumber(
+                stats.votesNeededFromConfirmed
+              )} more confirmed needed.`}
+            />
+
+            <DesktopStatCard
+              title="Projected Votes"
+              value={formatNumber(stats.projectedVotes)}
+              tone="blue"
+              subtitle={`${formatNumber(
+                stats.votesNeededFromProjected
+              )} projected votes short.`}
+            />
+
+            <DesktopStatCard
+              title="Confirmed Not Voted"
+              value={formatNumber(stats.confirmedNotVoted)}
+              tone="amber"
+              subtitle="Main turnout follow-up group."
+            />
+
+            <DesktopStatCard
+              title="Assignment Coverage"
+              value={`${stats.assignmentRate}%`}
+              tone="purple"
+              subtitle={`${formatNumber(stats.assigned)} assigned voters.`}
+            />
           </div>
         </div>
       </section>
 
-      <section className="px-4 py-6 sm:px-6 sm:py-8">
+      <section className="px-4 py-4 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              title="Total Voters"
-              value={formatNumber(stats.total)}
-              subtitle="Full register loaded."
-              tone="slate"
-            />
-
-            <SummaryCard
-              title="Confirmed Not Voted"
-              value={formatNumber(stats.confirmedNotVoted)}
-              subtitle="Main election-day follow-up group."
-              tone="amber"
-            />
-
-            <SummaryCard
-              title="Confirmed Pickup Not Voted"
-              value={formatNumber(stats.confirmedPickupNotVoted)}
-              subtitle="Needs transport follow-up."
-              tone="orange"
-            />
-
-            <SummaryCard
-              title="Assignment Coverage"
-              value={`${stats.assignmentRate}%`}
-              subtitle={`${formatNumber(stats.assigned)} assigned voters.`}
-              tone="blue"
-            />
+          <div className="mb-4 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+            <ExportChip label="Export Voters" onClick={exportFullVoterReport} primary />
+            <ExportChip label="Zone CSV" onClick={exportZoneReport} />
+            <ExportChip label="Polling CSV" onClick={exportPollingReport} />
+            <ExportChip label="Campaigner CSV" onClick={exportCampaignerReport} />
           </div>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
-              <SectionHeader
-                title="Support Status Report"
-                subtitle="Breakdown of voters by current campaign support status."
+          <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
+            <SectionHeader
+              title="Core Report Snapshot"
+              subtitle="Compact view of the most important numbers."
+            />
+
+            <div className="mt-3 divide-y divide-slate-100 sm:hidden">
+              <CompactMetric
+                label="Total Voters"
+                value={formatNumber(stats.total)}
+                tone="slate"
               />
 
-              <div className="mt-6 space-y-4">
+              <CompactMetric
+                label="Vote Target"
+                value={formatNumber(stats.target)}
+                tone="blue"
+              />
+
+              <CompactMetric
+                label="Confirmed Voted"
+                value={formatNumber(stats.confirmedVoted)}
+                tone="green"
+              />
+
+              <CompactMetric
+                label="Turnout Rate"
+                value={`${stats.turnoutRate}%`}
+                tone="green"
+              />
+
+              <CompactMetric
+                label="Unassigned"
+                value={formatNumber(stats.unassigned)}
+                tone={stats.unassigned > 0 ? "red" : "green"}
+              />
+
+              <CompactMetric
+                label="Pickup Issues"
+                value={formatNumber(stats.pickupIssues)}
+                tone={stats.pickupIssues > 0 ? "red" : "green"}
+              />
+            </div>
+
+            <div className="mt-6 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+              <DesktopStatCard
+                title="Total Voters"
+                value={formatNumber(stats.total)}
+                subtitle="Full register loaded."
+                tone="slate"
+              />
+
+              <DesktopStatCard
+                title="Confirmed Voted"
+                value={formatNumber(stats.confirmedVoted)}
+                subtitle={`${stats.confirmedTurnoutRate}% of confirmed supporters.`}
+                tone="green"
+              />
+
+              <DesktopStatCard
+                title="Pickup Not Voted"
+                value={formatNumber(stats.confirmedPickupNotVoted)}
+                subtitle="Confirmed supporters needing transport."
+                tone="orange"
+              />
+
+              <DesktopStatCard
+                title="Pickup Issues"
+                value={formatNumber(stats.pickupIssues)}
+                subtitle="Needs immediate attention."
+                tone="red"
+              />
+            </div>
+          </section>
+
+          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
+              <SectionHeader
+                title="Support Status"
+                subtitle="Breakdown by current support status."
+              />
+
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {supportReport.map((item) => (
-                  <div
+                  <ReportRow
                     key={item.status}
-                    className="rounded-2xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="break-words font-black text-slate-900">
-                          {item.status}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {formatNumber(item.total)} voters
-                        </p>
-                      </div>
-
-                      <p className="text-2xl font-black text-blue-700">
-                        {item.percentage}%
-                      </p>
-                    </div>
-
-                    <div className="mt-3">
-                      <ProgressBar value={item.percentage} tone="blue" />
-                    </div>
-                  </div>
+                    label={item.status}
+                    value={item.total}
+                    percent={item.percentage}
+                    tone={
+                      item.status === "Confirmed Supporter"
+                        ? "green"
+                        : item.status === "Leaning Supporter"
+                        ? "purple"
+                        : item.status === "Undecided"
+                        ? "amber"
+                        : item.status === "Not Supporting"
+                        ? "red"
+                        : "slate"
+                    }
+                  />
                 ))}
 
                 {supportReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No support status data available.
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
               <SectionHeader
-                title="Pickup Status Report"
-                subtitle="Breakdown of voters by transportation and pickup status."
+                title="Pickup Status"
+                subtitle="Transportation and pickup breakdown."
               />
 
-              <div className="mt-6 space-y-4">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {pickupReport.map((item) => (
-                  <div
+                  <ReportRow
                     key={item.status}
-                    className="rounded-2xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="break-words font-black text-slate-900">
-                          {item.status}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {formatNumber(item.total)} voters
-                        </p>
-                      </div>
-
-                      <p
-                        className={`text-2xl font-black ${
-                          item.status === "Issue"
-                            ? "text-red-700"
-                            : "text-amber-700"
-                        }`}
-                      >
-                        {item.percentage}%
-                      </p>
-                    </div>
-
-                    <div className="mt-3">
-                      <ProgressBar
-                        value={item.percentage}
-                        tone={item.status === "Issue" ? "red" : "amber"}
-                      />
-                    </div>
-                  </div>
+                    label={item.status}
+                    value={item.total}
+                    percent={item.percentage}
+                    tone={
+                      item.status === "Issue"
+                        ? "red"
+                        : item.status === "Completed"
+                        ? "green"
+                        : item.status === "No Pickup Needed"
+                        ? "slate"
+                        : "amber"
+                    }
+                  />
                 ))}
 
                 {pickupReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No pickup status data available.
                   </div>
                 )}
@@ -1167,107 +1317,82 @@ export default function ReportsPage() {
             </section>
           </div>
 
-          <section className="mt-6 rounded-3xl bg-white p-5 shadow sm:p-6">
+          <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
             <SectionHeader
               title="Zone Report"
-              subtitle="Mobile cards on phones, full table on desktop."
+              subtitle="Compact zone performance on mobile, full table on desktop."
               action={
                 <button
                   onClick={exportZoneReport}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:w-auto"
+                  className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
                 >
                   Export Zone CSV
                 </button>
               }
             />
 
-            <div className="mt-6 grid gap-4 lg:hidden">
+            <div className="mt-4 grid gap-3 lg:hidden">
               {zoneReport.map((item) => (
                 <div
                   key={item.zone}
-                  className="rounded-2xl border border-slate-200 p-4"
+                  className="min-w-0 rounded-2xl border border-slate-200 p-3"
                 >
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="break-words text-xl font-black text-slate-900">
+                      <h3 className="break-words text-base font-black text-slate-900">
                         {item.zone}
                       </h3>
-                      <p className="text-sm text-slate-500">
-                        Total voters: {formatNumber(item.total)}
+                      <p className="text-xs text-slate-500">
+                        Total: {formatNumber(item.total)}
                       </p>
                     </div>
 
                     <span
-                      className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                      className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${
                         item.pickupIssues > 0
                           ? "bg-red-100 text-red-800"
                           : "bg-green-100 text-green-800"
                       }`}
                     >
-                      {item.pickupIssues > 0
-                        ? `${item.pickupIssues} issue(s)`
-                        : "No issues"}
+                      {item.pickupIssues > 0 ? `${item.pickupIssues} issue` : "OK"}
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-green-50 p-3">
-                      <p className="text-xs font-semibold text-green-700">
-                        Confirmed
+                  <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Conf.
                       </p>
-                      <p className="mt-1 text-2xl font-black text-green-800">
+                      <p className="text-lg font-black text-green-700">
                         {formatNumber(item.confirmed)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-purple-50 p-3">
-                      <p className="text-xs font-semibold text-purple-700">
-                        Leaning
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Proj.
                       </p>
-                      <p className="mt-1 text-2xl font-black text-purple-800">
-                        {formatNumber(item.leaning)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-blue-50 p-3">
-                      <p className="text-xs font-semibold text-blue-700">
-                        Projected
-                      </p>
-                      <p className="mt-1 text-2xl font-black text-blue-800">
+                      <p className="text-lg font-black text-blue-700">
                         {formatNumber(item.projected)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-amber-50 p-3">
-                      <p className="text-xs font-semibold text-amber-700">
-                        Remaining
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Rem.
                       </p>
-                      <p className="mt-1 text-2xl font-black text-amber-800">
+                      <p className="text-lg font-black text-amber-700">
                         {formatNumber(item.confirmedRemaining)}
                       </p>
                     </div>
-                  </div>
 
-                  <div className="mt-4 grid gap-2 text-sm text-slate-700">
-                    <div className="flex justify-between gap-4">
-                      <span>Confirmed Voted</span>
-                      <span className="font-bold">
-                        {formatNumber(item.confirmedVoted)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between gap-4">
-                      <span>Pickup Needed</span>
-                      <span className="font-bold text-orange-700">
-                        {formatNumber(item.pickupNeeded)}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between gap-4">
-                      <span>Unassigned</span>
-                      <span className="font-bold text-red-700">
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-400">
+                        Unasn.
+                      </p>
+                      <p className="text-lg font-black text-red-700">
                         {formatNumber(item.unassigned)}
-                      </span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1344,62 +1469,69 @@ export default function ReportsPage() {
             </div>
           </section>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
               <SectionHeader
-                title="Polling Area Report"
+                title="Polling Areas"
                 subtitle="Performance by polling area."
                 action={
                   <button
                     onClick={exportPollingReport}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:w-auto"
+                    className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
                   >
                     Export Polling CSV
                   </button>
                 }
               />
 
-              <div className="mt-6 space-y-4">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {pollingReport.map((item) => {
                   const turnout = percentage(item.voted, item.total);
 
                   return (
                     <div
                       key={item.pollingArea}
-                      className="rounded-2xl border border-slate-200 p-4"
+                      className="rounded-2xl border border-slate-200 p-3 sm:p-4"
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="break-words font-black text-slate-900">
-                            Polling Area {item.pollingArea}
+                          <p className="truncate font-black text-slate-900">
+                            Polling {item.pollingArea}
                           </p>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-xs text-slate-500 sm:text-sm">
                             {formatNumber(item.confirmed)} confirmed ·{" "}
-                            {formatNumber(item.pickupNeeded)} pickup needed
+                            {formatNumber(item.confirmedRemaining)} remaining
                           </p>
                         </div>
 
-                        <p className="text-2xl font-black text-green-700">
+                        <p className="shrink-0 text-xl font-black text-green-700 sm:text-2xl">
                           {turnout}%
                         </p>
                       </div>
 
-                      <div className="mt-3">
+                      <div className="mt-2 sm:mt-3">
                         <ProgressBar value={turnout} tone="green" />
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-xl bg-blue-50 p-3 text-blue-800">
-                          Projected:{" "}
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs sm:mt-3">
+                        <div className="rounded-xl bg-blue-50 p-2 text-blue-800">
+                          Proj.{" "}
                           <span className="font-black">
                             {formatNumber(item.projected)}
                           </span>
                         </div>
 
-                        <div className="rounded-xl bg-amber-50 p-3 text-amber-800">
-                          Remaining:{" "}
+                        <div className="rounded-xl bg-orange-50 p-2 text-orange-800">
+                          Pick.{" "}
                           <span className="font-black">
-                            {formatNumber(item.confirmedRemaining)}
+                            {formatNumber(item.pickupNeeded)}
+                          </span>
+                        </div>
+
+                        <div className="rounded-xl bg-red-50 p-2 text-red-800">
+                          Issue{" "}
+                          <span className="font-black">
+                            {formatNumber(item.pickupIssues)}
                           </span>
                         </div>
                       </div>
@@ -1408,56 +1540,52 @@ export default function ReportsPage() {
                 })}
 
                 {pollingReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No polling area data available.
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
               <SectionHeader
-                title="Campaigner Report"
-                subtitle="Campaigner contribution by assigned voter list."
+                title="Campaigners"
+                subtitle="Campaigner contribution by assigned list."
                 action={
                   <button
                     onClick={exportCampaignerReport}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:w-auto"
+                    className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
                   >
                     Export Campaigner CSV
                   </button>
                 }
               />
 
-              <div className="mt-6 space-y-3">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {campaignerReport.map((item, index) => (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-slate-200 p-4"
+                    className="rounded-2xl border border-slate-200 p-3 sm:p-4"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="break-words font-black text-slate-900">
+                        <p className="truncate font-black text-slate-900">
                           {index + 1}. {item.name}
                         </p>
 
-                        <p className="text-sm text-slate-500">
-                          {item.zone || "No zone assigned"}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 sm:text-sm">
+                          {item.zone || "No zone"} ·{" "}
                           {formatNumber(item.assigned)} assigned ·{" "}
-                          {formatNumber(item.confirmedVoted)} confirmed voted ·{" "}
-                          {formatNumber(item.pickupNeeded)} pickup needed
+                          {formatNumber(item.pickupNeeded)} pickup
                         </p>
                       </div>
 
-                      <div className="w-full rounded-2xl bg-blue-50 px-4 py-2 text-left sm:w-auto sm:text-right">
-                        <p className="text-2xl font-black text-blue-800">
+                      <div className="shrink-0 rounded-2xl bg-blue-50 px-3 py-2 text-right">
+                        <p className="text-xl font-black text-blue-800">
                           {formatNumber(item.confirmed)}
                         </p>
-                        <p className="text-xs font-bold text-blue-700">
-                          Confirmed
+                        <p className="text-[10px] font-bold uppercase text-blue-700">
+                          Conf.
                         </p>
                       </div>
                     </div>
@@ -1465,7 +1593,7 @@ export default function ReportsPage() {
                 ))}
 
                 {campaignerReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No campaigner report data available.
                   </div>
                 )}
@@ -1473,34 +1601,34 @@ export default function ReportsPage() {
             </section>
           </div>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
               <SectionHeader
-                title="Confirmed Supporters Not Yet Voted"
+                title="Confirmed Not Voted"
                 subtitle="Top records requiring turnout follow-up."
               />
 
-              <div className="mt-6 space-y-3">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {confirmedNotVotedList.map((voter) => (
                   <div
                     key={voter.id}
-                    className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
+                    className="rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
                         {getRegNo(voter)}
                       </p>
 
-                      <p className="mt-1 break-words text-lg font-black text-slate-900">
+                      <p className="mt-1 truncate text-base font-black text-slate-900 sm:text-lg">
                         {getDisplayName(voter)}
                       </p>
 
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-xs text-slate-600 sm:text-sm">
                         Zone: {voter.zone || "No zone"} · Polling:{" "}
                         {voter.polling_area || "No polling area"}
                       </p>
 
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-xs text-slate-600 sm:text-sm">
                         Campaigner:{" "}
                         {voter.campaigner_id
                           ? campaignerNameMap.get(voter.campaigner_id) ||
@@ -1512,97 +1640,56 @@ export default function ReportsPage() {
                 ))}
 
                 {confirmedNotVotedList.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No confirmed supporters pending turnout.
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
               <SectionHeader
-                title="Pickup Risk List"
-                subtitle="Confirmed supporters who need pickup and have not voted yet."
+                title="Pickup Risk"
+                subtitle="Confirmed supporters needing pickup and not yet voted."
               />
 
-              <div className="mt-6 space-y-3">
+              <div className="mt-4 space-y-3 sm:mt-6">
                 {pickupRiskList.map((voter) => (
                   <div
                     key={voter.id}
-                    className="rounded-2xl border border-orange-200 bg-orange-50 p-4"
+                    className="rounded-2xl border border-orange-200 bg-orange-50 p-3 sm:p-4"
                   >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-wide text-orange-700">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">
                           {getRegNo(voter)}
                         </p>
 
-                        <p className="mt-1 break-words text-lg font-black text-slate-900">
+                        <p className="mt-1 truncate text-base font-black text-slate-900 sm:text-lg">
                           {getDisplayName(voter)}
                         </p>
 
-                        <p className="mt-1 text-sm text-slate-600">
+                        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
                           Zone: {voter.zone || "No zone"} · Polling:{" "}
                           {voter.polling_area || "No polling area"}
                         </p>
-
-                        <p className="mt-1 text-sm text-slate-600">
-                          Status: {getPickupStatus(voter)}
-                        </p>
                       </div>
 
-                      <span className="w-fit shrink-0 rounded-full bg-orange-200 px-3 py-1 text-xs font-black text-orange-900">
-                        Pickup
+                      <span className="w-fit shrink-0 rounded-full bg-orange-200 px-2.5 py-1 text-[11px] font-black text-orange-900">
+                        {getPickupStatus(voter)}
                       </span>
                     </div>
                   </div>
                 ))}
 
                 {pickupRiskList.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
                     No pickup risks at this time.
                   </div>
                 )}
               </div>
             </section>
           </div>
-
-          <section className="mt-6 rounded-3xl bg-white p-5 shadow sm:p-6">
-            <SectionHeader
-              title="Export Center"
-              subtitle="Download CSV reports for external review, printing, or backup."
-            />
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <button
-                onClick={exportFullVoterReport}
-                className="rounded-2xl bg-blue-700 px-5 py-4 text-sm font-bold text-white hover:bg-blue-800"
-              >
-                Export Full Voter Report
-              </button>
-
-              <button
-                onClick={exportZoneReport}
-                className="rounded-2xl border border-slate-300 px-5 py-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Export Zone Report
-              </button>
-
-              <button
-                onClick={exportPollingReport}
-                className="rounded-2xl border border-slate-300 px-5 py-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Export Polling Report
-              </button>
-
-              <button
-                onClick={exportCampaignerReport}
-                className="rounded-2xl border border-slate-300 px-5 py-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Export Campaigner Report
-              </button>
-            </div>
-          </section>
         </div>
       </section>
     </main>
