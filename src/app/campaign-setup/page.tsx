@@ -39,6 +39,16 @@ type Competitor = {
   display_order: number | null;
 };
 
+type SupportStatusOption = {
+  id: string;
+  value: string;
+  label: string;
+  description: string | null;
+  color: string | null;
+  display_order: number | null;
+  is_active: boolean | null;
+};
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value || 0);
 }
@@ -79,6 +89,9 @@ export default function CampaignSetupPage() {
   const [zones, setZones] = useState<CampaignZone[]>([]);
   const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [supportStatusOptions, setSupportStatusOptions] = useState<
+    SupportStatusOption[]
+  >([]);
 
   const [electionName, setElectionName] = useState("");
   const [voteTarget, setVoteTarget] = useState("");
@@ -146,6 +159,7 @@ export default function CampaignSetupPage() {
       loadZones(),
       loadPollingAreas(),
       loadCompetitors(),
+      loadSupportStatusOptions(),
     ]);
 
     setLoading(false);
@@ -231,6 +245,60 @@ export default function CampaignSetupPage() {
       setOpponentOrder("");
     }
   }
+
+  async function loadSupportStatusOptions() {
+    const { data, error } = await supabase
+      .from("support_status_options")
+      .select("id, value, label, description, color, display_order, is_active")
+      .order("display_order", { ascending: true })
+      .order("label", { ascending: true });
+
+    if (error) {
+      console.error("Support status options error:", error);
+      setSupportStatusOptions([]);
+      return;
+    }
+
+    setSupportStatusOptions(data || []);
+  }
+
+  function updateSupportStatusLocal(
+    id: string,
+    changes: Partial<SupportStatusOption>
+  ) {
+    setSupportStatusOptions((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...changes } : item))
+    );
+  }
+
+  async function saveSupportStatusOption(option: SupportStatusOption) {
+    if (!option.label.trim()) {
+      alert("Enter a label for this support status.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("support_status_options")
+      .update({
+        label: option.label.trim(),
+        description: option.description?.trim() || null,
+        color: option.color || "slate",
+        display_order: option.display_order || 0,
+        is_active: option.is_active ?? true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", option.id);
+
+    if (error) {
+      console.error("Save support status option error:", error);
+      setMessage(error.message || "Error saving support status option.");
+      return;
+    }
+
+    setMessage("Support status option saved.");
+    await loadSupportStatusOptions();
+  }
+
 
   async function saveSettings() {
     if (!electionName.trim()) {
@@ -433,9 +501,11 @@ export default function CampaignSetupPage() {
       voteTarget: settings?.vote_target_to_win || 0,
       zones: zones.length,
       pollingAreas: pollingAreas.length,
+      supportStatuses: supportStatusOptions.filter((item) => item.is_active)
+        .length,
       opponent: competitors[0]?.name || "Not set",
     };
-  }, [settings, zones, pollingAreas, competitors]);
+  }, [settings, zones, pollingAreas, competitors, supportStatusOptions]);
 
   if (loading) {
     return (
@@ -502,7 +572,7 @@ export default function CampaignSetupPage() {
             </button>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-2xl bg-white/10 p-3">
               <p className="text-xs text-slate-300">Vote Target</p>
               <p className="mt-1 text-2xl font-black">
@@ -521,6 +591,13 @@ export default function CampaignSetupPage() {
               <p className="text-xs text-slate-300">Polling</p>
               <p className="mt-1 text-2xl font-black">
                 {formatNumber(setupSummary.pollingAreas)}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/10 p-3">
+              <p className="text-xs text-slate-300">Support</p>
+              <p className="mt-1 text-2xl font-black">
+                {formatNumber(setupSummary.supportStatuses)}
               </p>
             </div>
 
@@ -578,6 +655,105 @@ export default function CampaignSetupPage() {
             >
               {savingSettings ? "Saving..." : "Save Victory Settings"}
             </button>
+          </section>
+
+
+          <section className="mt-5 rounded-3xl bg-white p-4 shadow sm:p-6">
+            <SectionHeader
+              title="Support Status Fields"
+              subtitle="Edit the labels, descriptions, order, and visibility used on the Voters page. The system value stays fixed so dashboard reports continue to work correctly."
+            />
+
+            <div className="mt-5 grid gap-3">
+              {supportStatusOptions.map((option) => (
+                <div
+                  key={option.id}
+                  className="rounded-2xl border border-slate-200 p-4"
+                >
+                  <div className="grid gap-3 lg:grid-cols-[1fr_1.3fr_1.6fr_0.8fr_0.9fr_auto] lg:items-end">
+                    <div>
+                      <InputLabel>System Value</InputLabel>
+                      <input
+                        value={option.value}
+                        disabled
+                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-500"
+                      />
+                    </div>
+
+                    <div>
+                      <InputLabel>Display Label</InputLabel>
+                      <input
+                        value={option.label}
+                        onChange={(event) =>
+                          updateSupportStatusLocal(option.id, {
+                            label: event.target.value,
+                          })
+                        }
+                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      />
+                    </div>
+
+                    <div>
+                      <InputLabel>Description</InputLabel>
+                      <input
+                        value={option.description || ""}
+                        onChange={(event) =>
+                          updateSupportStatusLocal(option.id, {
+                            description: event.target.value,
+                          })
+                        }
+                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                        placeholder="Optional"
+                      />
+                    </div>
+
+                    <div>
+                      <InputLabel>Order</InputLabel>
+                      <input
+                        type="number"
+                        value={option.display_order ?? 0}
+                        onChange={(event) =>
+                          updateSupportStatusLocal(option.id, {
+                            display_order: cleanNumber(event.target.value),
+                          })
+                        }
+                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      />
+                    </div>
+
+                    <div>
+                      <InputLabel>Status</InputLabel>
+                      <select
+                        value={option.is_active ? "Active" : "Hidden"}
+                        onChange={(event) =>
+                          updateSupportStatusLocal(option.id, {
+                            is_active: event.target.value === "Active",
+                          })
+                        }
+                        className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      >
+                        <option>Active</option>
+                        <option>Hidden</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => saveSupportStatusOption(option)}
+                      className="rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {supportStatusOptions.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                  No support status options found. Run the support status setup
+                  SQL first.
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="mt-5 rounded-3xl bg-white p-4 shadow sm:p-6">

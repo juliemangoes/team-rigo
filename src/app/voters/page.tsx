@@ -37,6 +37,15 @@ type PollingArea = {
   display_order: number | null;
 };
 
+type SupportStatusOption = {
+  id: string;
+  value: string;
+  label: string;
+  description: string | null;
+  display_order: number | null;
+  is_active: boolean | null;
+};
+
 type CampaignerRelation =
   | {
       id: string;
@@ -116,7 +125,7 @@ const voterSelect = `
   )
 `;
 
-const supportStatuses = [
+const defaultSupportStatuses = [
   "Unknown",
   "Confirmed Supporter",
   "Leaning Supporter",
@@ -150,6 +159,9 @@ export default function VotersPage() {
   const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
   const [campaignZones, setCampaignZones] = useState<CampaignZone[]>([]);
   const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
+  const [supportStatusOptions, setSupportStatusOptions] = useState<
+    SupportStatusOption[]
+  >([]);
   const [voters, setVoters] = useState<Voter[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -274,6 +286,20 @@ export default function VotersPage() {
       setPollingAreas([]);
     } else {
       setPollingAreas(pollingData || []);
+    }
+
+    const { data: supportData, error: supportError } = await supabase
+      .from("support_status_options")
+      .select("id, value, label, description, display_order, is_active")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("label", { ascending: true });
+
+    if (supportError) {
+      console.error("Support status options error:", supportError);
+      setSupportStatusOptions([]);
+    } else {
+      setSupportStatusOptions(supportData || []);
     }
 
     setLoading(false);
@@ -451,6 +477,21 @@ export default function VotersPage() {
     if (!area) return code;
 
     return area.name ? `${area.code} - ${area.name}` : area.code;
+  }
+
+  const supportStatuses = useMemo(() => {
+    const activeOptions = supportStatusOptions
+      .filter((item) => item.is_active !== false)
+      .map((item) => item.value);
+
+    return activeOptions.length > 0 ? activeOptions : defaultSupportStatuses;
+  }, [supportStatusOptions]);
+
+  function getSupportStatusLabel(value: string | null) {
+    const cleanValue = value || "Unknown";
+    const option = supportStatusOptions.find((item) => item.value === cleanValue);
+
+    return option?.label || cleanValue;
   }
 
   const pageStats = useMemo(() => {
@@ -770,7 +811,9 @@ export default function VotersPage() {
               >
                 <option>All</option>
                 {supportStatuses.map((status) => (
-                  <option key={status}>{status}</option>
+                  <option key={status} value={status}>
+                    {getSupportStatusLabel(status)}
+                  </option>
                 ))}
               </select>
             </div>
@@ -900,7 +943,9 @@ export default function VotersPage() {
               >
                 <option value="">Set Support Status</option>
                 {supportStatuses.map((status) => (
-                  <option key={status}>{status}</option>
+                  <option key={status} value={status}>
+                    {getSupportStatusLabel(status)}
+                  </option>
                 ))}
               </select>
 
@@ -1064,12 +1109,14 @@ export default function VotersPage() {
                           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900"
                         >
                           {supportStatuses.map((status) => (
-                            <option key={status}>{status}</option>
+                            <option key={status} value={status}>
+                              {getSupportStatusLabel(status)}
+                            </option>
                           ))}
                         </select>
                       ) : (
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {voter.support_status || "Unknown"}
+                          {getSupportStatusLabel(voter.support_status)}
                         </span>
                       )}
                     </td>
