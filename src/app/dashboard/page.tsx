@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -49,6 +50,22 @@ type Campaigner = {
   full_name: string;
   role: string | null;
   zone: string | null;
+};
+
+type Competitor = {
+  id: string;
+  name: string;
+  description: string | null;
+  display_order: number | null;
+};
+
+type CompetitorEstimate = {
+  id: string;
+  competitor_id: string | null;
+  zone: string | null;
+  polling_area: string | null;
+  estimated_votes: number | null;
+  notes: string | null;
 };
 
 type IssueVoter = {
@@ -221,19 +238,6 @@ function textClass(tone: string) {
   return "text-slate-700";
 }
 
-// Lighter tone variants for use on the dark hero panel, where the 700-level
-// shades above are too low-contrast to read on small screens.
-function textClassOnDark(tone: string) {
-  if (tone === "green") return "text-green-300";
-  if (tone === "blue") return "text-blue-300";
-  if (tone === "amber") return "text-amber-300";
-  if (tone === "orange") return "text-orange-300";
-  if (tone === "red") return "text-red-300";
-  if (tone === "purple") return "text-purple-300";
-
-  return "text-slate-100";
-}
-
 function bgClass(tone: string) {
   if (tone === "green") return "bg-green-50";
   if (tone === "blue") return "bg-blue-50";
@@ -243,6 +247,39 @@ function bgClass(tone: string) {
   if (tone === "purple") return "bg-purple-50";
 
   return "bg-slate-50";
+}
+
+
+function getRaceStatus(margin: number, competitorTotal: number) {
+  if (competitorTotal <= 0) {
+    return {
+      label: "No Competitor Data",
+      tone: "slate",
+      description: "Add competitor estimates in Campaign Setup.",
+    };
+  }
+
+  if (margin >= 75) {
+    return {
+      label: "Ahead",
+      tone: "green",
+      description: "Our projected vote strength is ahead of the top competitor estimate.",
+    };
+  }
+
+  if (margin <= -75) {
+    return {
+      label: "Behind",
+      tone: "red",
+      description: "The top competitor estimate is ahead of our projected vote strength.",
+    };
+  }
+
+  return {
+    label: "Toss Up",
+    tone: "amber",
+    description: "The race is close against the top competitor estimate.",
+  };
 }
 
 function ProgressBar({ value, tone = "blue" }: { value: number; tone?: string }) {
@@ -263,7 +300,7 @@ function SectionHeader({
 }: {
   title: string;
   subtitle: string;
-  action?: React.ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -284,46 +321,20 @@ function CompactMetric({
   value,
   tone = "slate",
   detail,
-  dark = false,
 }: {
   label: string;
   value: string | number;
   tone?: string;
   detail?: string;
-  dark?: boolean;
 }) {
   return (
-    <div
-      className={`flex min-w-0 items-center justify-between gap-3 py-3 ${
-        dark
-          ? ""
-          : "border-b border-slate-100 last:border-b-0"
-      }`}
-    >
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-b-0">
       <div className="min-w-0">
-        <p
-          className={`truncate text-sm font-semibold ${
-            dark ? "text-slate-300" : "text-slate-600"
-          }`}
-        >
-          {label}
-        </p>
-        {detail && (
-          <p
-            className={`mt-0.5 text-xs ${
-              dark ? "text-slate-400" : "text-slate-400"
-            }`}
-          >
-            {detail}
-          </p>
-        )}
+        <p className="truncate text-sm font-semibold text-slate-600">{label}</p>
+        {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
       </div>
 
-      <p
-        className={`shrink-0 text-xl font-black ${
-          dark ? textClassOnDark(tone) : textClass(tone)
-        }`}
-      >
+      <p className={`shrink-0 text-xl font-black ${textClass(tone)}`}>
         {value}
       </p>
     </div>
@@ -388,6 +399,8 @@ export default function DashboardPage() {
   const [voters, setVoters] = useState<VoterSnapshot[]>([]);
   const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
   const [issueVoters, setIssueVoters] = useState<IssueVoter[]>([]);
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [competitorEstimates, setCompetitorEstimates] = useState<CompetitorEstimate[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -441,6 +454,8 @@ export default function DashboardPage() {
       voterResult,
       campaignerResult,
       issueResult,
+      competitorsResult,
+      competitorEstimatesResult,
     ] = await Promise.all([
       supabase
         .from("campaign_settings")
@@ -501,6 +516,17 @@ export default function DashboardPage() {
         .eq("pickup_status", "Issue")
         .order("last_name", { ascending: true, nullsFirst: false })
         .limit(8),
+
+      supabase
+        .from("competitors")
+        .select("id, name, description, display_order")
+        .order("display_order", { ascending: true })
+        .order("name", { ascending: true }),
+
+      supabase
+        .from("competitor_estimates")
+        .select("id, competitor_id, zone, polling_area, estimated_votes, notes")
+        .range(0, 49999),
     ]);
 
     if (settingsResult.error) {
@@ -544,6 +570,20 @@ export default function DashboardPage() {
       setIssueVoters([]);
     } else {
       setIssueVoters(issueResult.data || []);
+    }
+
+    if (competitorsResult.error) {
+      console.error("Competitors error:", competitorsResult.error);
+      setCompetitors([]);
+    } else {
+      setCompetitors(competitorsResult.data || []);
+    }
+
+    if (competitorEstimatesResult.error) {
+      console.error("Competitor estimates error:", competitorEstimatesResult.error);
+      setCompetitorEstimates([]);
+    } else {
+      setCompetitorEstimates(competitorEstimatesResult.data || []);
     }
 
     setLoading(false);
@@ -624,6 +664,48 @@ export default function DashboardPage() {
       assignmentRate: percentage(assigned, total),
     };
   }, [voters, settings]);
+
+  const competitorStats = useMemo(() => {
+    const totals = competitors
+      .map((competitor) => {
+        const total = competitorEstimates
+          .filter((estimate) => estimate.competitor_id === competitor.id)
+          .reduce((sum, estimate) => sum + (estimate.estimated_votes || 0), 0);
+
+        return {
+          id: competitor.id,
+          name: competitor.name,
+          description: competitor.description,
+          total,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    const top = totals[0] || null;
+    const topByZone = new Map<string, number>();
+
+    if (top) {
+      competitorEstimates
+        .filter((estimate) => estimate.competitor_id === top.id)
+        .forEach((estimate) => {
+          const zone = estimate.zone || "No Zone";
+          topByZone.set(zone, (topByZone.get(zone) || 0) + (estimate.estimated_votes || 0));
+        });
+    }
+
+    const competitorTotal = top?.total || 0;
+    const margin = stats.projectedVotes - competitorTotal;
+    const raceStatus = getRaceStatus(margin, competitorTotal);
+
+    return {
+      totals,
+      top,
+      topByZone,
+      competitorTotal,
+      margin,
+      raceStatus,
+    };
+  }, [competitors, competitorEstimates, stats.projectedVotes]);
 
   const zoneSummary = useMemo(() => {
     const map = new Map<string, ZoneSummary>();
@@ -940,31 +1022,31 @@ export default function DashboardPage() {
 
             <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
               <CompactMetric
-                dark
                 label="Confirmed"
                 value={formatNumber(stats.confirmed)}
                 tone="green"
               />
 
               <CompactMetric
-                dark
                 label="Need"
                 value={formatNumber(stats.votesNeededFromProjected)}
                 tone={stats.votesNeededFromProjected > 0 ? "red" : "green"}
               />
 
               <CompactMetric
-                dark
-                label="Leaning"
-                value={formatNumber(stats.leaning)}
-                tone="purple"
+                label="Opponent"
+                value={formatNumber(competitorStats.competitorTotal)}
+                tone="red"
               />
 
               <CompactMetric
-                dark
-                label="Not Voted"
-                value={formatNumber(stats.confirmedNotVoted)}
-                tone="amber"
+                label="Margin"
+                value={
+                  competitorStats.margin >= 0
+                    ? `+${formatNumber(competitorStats.margin)}`
+                    : `-${formatNumber(Math.abs(competitorStats.margin))}`
+                }
+                tone={competitorStats.margin >= 0 ? "green" : "red"}
               />
             </div>
 
@@ -1002,17 +1084,21 @@ export default function DashboardPage() {
             />
 
             <DesktopStatCard
-              title="Vote Target"
-              value={formatNumber(stats.target)}
-              tone="slate"
-              subtitle="Set by Campaign Manager."
+              title="Top Competitor"
+              value={formatNumber(competitorStats.competitorTotal)}
+              tone="red"
+              subtitle={competitorStats.top?.name || "No competitor estimate set."}
             />
 
             <DesktopStatCard
-              title="Confirmed Not Voted"
-              value={formatNumber(stats.confirmedNotVoted)}
-              tone="amber"
-              subtitle="Key turnout follow-up group."
+              title="Race Margin"
+              value={
+                competitorStats.margin >= 0
+                  ? `+${formatNumber(competitorStats.margin)}`
+                  : `-${formatNumber(Math.abs(competitorStats.margin))}`
+              }
+              tone={competitorStats.margin >= 0 ? "green" : "red"}
+              subtitle={competitorStats.raceStatus.description}
             />
           </div>
         </div>
@@ -1043,7 +1129,7 @@ export default function DashboardPage() {
                 }
               />
 
-              <div className="mt-3 sm:hidden">
+              <div className="mt-3 divide-y divide-slate-100 sm:hidden">
                 <CompactMetric
                   label="Unassigned Voters"
                   value={formatNumber(stats.unassigned)}
@@ -1159,6 +1245,73 @@ export default function DashboardPage() {
 
           <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
             <SectionHeader
+              title="Competitor Watch"
+              subtitle="Compare our projection against competitor estimates entered in Campaign Setup."
+              action={
+                <Link
+                  href="/campaign-setup"
+                  className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
+                >
+                  Update Competitors
+                </Link>
+              }
+            />
+
+            <div className="mt-3 divide-y divide-slate-100 sm:hidden">
+              <CompactMetric
+                label="Top Competitor"
+                value={competitorStats.top?.name || "None"}
+                tone="red"
+              />
+
+              <CompactMetric
+                label="Competitor Estimate"
+                value={formatNumber(competitorStats.competitorTotal)}
+                tone="red"
+              />
+
+              <CompactMetric
+                label="Our Projection"
+                value={formatNumber(stats.projectedVotes)}
+                tone="blue"
+              />
+
+              <CompactMetric
+                label="Race Margin"
+                value={
+                  competitorStats.margin >= 0
+                    ? `+${formatNumber(competitorStats.margin)}`
+                    : `-${formatNumber(Math.abs(competitorStats.margin))}`
+                }
+                tone={competitorStats.margin >= 0 ? "green" : "red"}
+              />
+            </div>
+
+            <div className="mt-6 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+              {competitorStats.totals.slice(0, 4).map((competitor) => (
+                <DesktopStatCard
+                  key={competitor.id}
+                  title={competitor.name}
+                  value={formatNumber(competitor.total)}
+                  tone="red"
+                  subtitle={
+                    competitor.id === competitorStats.top?.id
+                      ? "Top competitor estimate"
+                      : "Competitor estimate"
+                  }
+                />
+              ))}
+
+              {competitorStats.totals.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-4">
+                  No competitor data entered yet. Add competitors and vote estimates in Campaign Setup.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
+            <SectionHeader
               title="Zone Battle Map"
               subtitle="Where support, turnout, and pickup risks are located."
             />
@@ -1211,19 +1364,27 @@ export default function DashboardPage() {
 
                     <div>
                       <p className="text-[11px] font-semibold text-slate-400">
-                        Rem.
+                        Opp.
                       </p>
-                      <p className="text-lg font-black text-amber-700">
-                        {formatNumber(item.confirmedRemaining)}
+                      <p className="text-lg font-black text-red-700">
+                        {formatNumber(competitorStats.topByZone.get(item.zone) || 0)}
                       </p>
                     </div>
 
                     <div>
                       <p className="text-[11px] font-semibold text-slate-400">
-                        Pick.
+                        Margin
                       </p>
-                      <p className="text-lg font-black text-orange-700">
-                        {formatNumber(item.pickupNeeded)}
+                      <p
+                        className={`text-lg font-black ${
+                          item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
+                            ? "text-green-700"
+                            : "text-red-700"
+                        }`}
+                      >
+                        {item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
+                          ? `+${formatNumber(item.projected - (competitorStats.topByZone.get(item.zone) || 0))}`
+                          : `-${formatNumber(Math.abs(item.projected - (competitorStats.topByZone.get(item.zone) || 0)))}`}
                       </p>
                     </div>
                   </div>
@@ -1246,6 +1407,8 @@ export default function DashboardPage() {
                     <th className="p-3">Confirmed</th>
                     <th className="p-3">Leaning</th>
                     <th className="p-3">Projected</th>
+                    <th className="p-3">Competitor</th>
+                    <th className="p-3">Margin</th>
                     <th className="p-3">Confirmed Voted</th>
                     <th className="p-3">Confirmed Remaining</th>
                     <th className="p-3">Pickup Needed</th>
@@ -1274,6 +1437,22 @@ export default function DashboardPage() {
 
                       <td className="p-3 font-bold text-blue-700">
                         {formatNumber(item.projected)}
+                      </td>
+
+                      <td className="p-3 font-bold text-red-700">
+                        {formatNumber(competitorStats.topByZone.get(item.zone) || 0)}
+                      </td>
+
+                      <td
+                        className={`p-3 font-black ${
+                          item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
+                            ? "text-green-700"
+                            : "text-red-700"
+                        }`}
+                      >
+                        {item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
+                          ? `+${formatNumber(item.projected - (competitorStats.topByZone.get(item.zone) || 0))}`
+                          : `-${formatNumber(Math.abs(item.projected - (competitorStats.topByZone.get(item.zone) || 0)))}`}
                       </td>
 
                       <td className="p-3 text-slate-700">
@@ -1305,7 +1484,7 @@ export default function DashboardPage() {
                   {zoneSummary.length === 0 && (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={11}
                         className="p-8 text-center text-slate-500"
                       >
                         No zone data available.
