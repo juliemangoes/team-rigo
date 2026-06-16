@@ -40,17 +40,6 @@ const allLinks: NavLink[] = [
     description: "Voter records",
   },
   {
-    href: "/campaigners",
-    label: "Field View",
-    shortLabel: "Field",
-    description: "Campaigner and driver work",
-  },
-  {
-    href: "/scrutineer",
-    label: "Scrutineer",
-    description: "Election day marking",
-  },
-  {
     href: "/team",
     label: "Team Setup",
     shortLabel: "Team",
