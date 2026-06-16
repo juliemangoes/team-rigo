@@ -25,8 +25,6 @@ const allLinks: NavLink[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/campaign-setup", label: "Campaign Setup", shortLabel: "Setup" },
   { href: "/voters", label: "Voters" },
-  { href: "/campaigners", label: "Field View", shortLabel: "Field" },
-  { href: "/scrutineer", label: "Scrutineer" },
   { href: "/team", label: "Team Setup", shortLabel: "Team" },
   { href: "/upload", label: "Upload" },
   { href: "/reports", label: "Reports" },
