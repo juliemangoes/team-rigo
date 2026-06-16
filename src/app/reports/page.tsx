@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -13,11 +11,50 @@ type TeamProfile = {
   zone: string | null;
 };
 
-type CampaignSettings = {
-  id: number;
-  election_name: string | null;
-  vote_target_to_win: number | null;
+type Campaigner = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  zone: string | null;
+  role: string | null;
 };
+
+type CampaignZone = {
+  id: string;
+  name: string;
+  description: string | null;
+  display_order: number | null;
+};
+
+type PollingArea = {
+  id: string;
+  code: string;
+  name: string | null;
+  location: string | null;
+  display_order: number | null;
+};
+
+type SupportStatusOption = {
+  id: string;
+  value: string;
+  label: string;
+  description: string | null;
+  color: string | null;
+  display_order: number | null;
+  is_active: boolean | null;
+};
+
+type CampaignerRelation =
+  | {
+      id: string;
+      full_name: string;
+    }
+  | {
+      id: string;
+      full_name: string;
+    }[]
+  | null;
 
 type Voter = {
   id: string;
@@ -33,99 +70,144 @@ type Voter = {
   address: string | null;
   zone: string | null;
   polling_area: string | null;
+  polling_station: string | null;
   support_status: string | null;
+  campaigner_id: string | null;
   pickup_needed: boolean;
   pickup_status: string | null;
   voted: boolean;
   voted_at: string | null;
-  campaigner_id: string | null;
   notes: string | null;
+  campaigners?: {
+    id: string;
+    full_name: string;
+  } | null;
 };
 
-type Campaigner = {
-  id: string;
-  full_name: string;
-  role: string | null;
-  zone: string | null;
+type RawVoter = Omit<Voter, "campaigners"> & {
+  campaigners?: CampaignerRelation;
 };
 
-type ZoneReport = {
-  zone: string;
+type ReportType =
+  | "filtered"
+  | "support_status"
+  | "zone"
+  | "polling_area"
+  | "campaigner"
+  | "unassigned"
+  | "voted_status";
+
+type SummaryRow = {
+  label: string;
   total: number;
   confirmed: number;
   leaning: number;
-  undecided: number;
-  unknown: number;
-  projected: number;
+  notSupporting: number;
+  undecidedUnknown: number;
   voted: number;
-  confirmedVoted: number;
-  confirmedRemaining: number;
+  notVoted: number;
   pickupNeeded: number;
-  pickupIssues: number;
-  unassigned: number;
 };
 
-type PollingReport = {
-  pollingArea: string;
-  total: number;
-  confirmed: number;
-  leaning: number;
-  projected: number;
-  voted: number;
-  confirmedVoted: number;
-  confirmedRemaining: number;
-  pickupNeeded: number;
-  pickupIssues: number;
-};
+const voterSelect = `
+  id,
+  voter_reg_no,
+  voter_number,
+  first_name,
+  middle_name,
+  last_name,
+  full_name,
+  contact_no,
+  phone,
+  street_name,
+  address,
+  zone,
+  polling_area,
+  polling_station,
+  support_status,
+  campaigner_id,
+  pickup_needed,
+  pickup_status,
+  voted,
+  voted_at,
+  notes,
+  campaigners:campaigner_id (
+    id,
+    full_name
+  )
+`;
 
-type CampaignerReport = {
-  id: string;
-  name: string;
-  zone: string | null;
-  assigned: number;
-  confirmed: number;
-  leaning: number;
-  projected: number;
-  voted: number;
-  confirmedVoted: number;
-  pickupNeeded: number;
-  pickupIssues: number;
-};
+const reportTypes: { value: ReportType; label: string; description: string }[] = [
+  {
+    value: "filtered",
+    label: "Filtered Voter List",
+    description: "Export the current filtered voter list.",
+  },
+  {
+    value: "support_status",
+    label: "By Support Status",
+    description: "Group voters by support status.",
+  },
+  {
+    value: "zone",
+    label: "By Zone",
+    description: "Group voters by campaign zone.",
+  },
+  {
+    value: "polling_area",
+    label: "By Polling Area",
+    description: "Group voters by polling area.",
+  },
+  {
+    value: "campaigner",
+    label: "By Campaigner",
+    description: "Group voters by assigned campaigner.",
+  },
+  {
+    value: "unassigned",
+    label: "Unassigned Voters",
+    description: "Export voters not assigned to a campaigner.",
+  },
+  {
+    value: "voted_status",
+    label: "Voted / Not Voted",
+    description: "Group voters by voted status.",
+  },
+];
 
-type Tone = "slate" | "blue" | "green" | "amber" | "red" | "purple" | "orange";
-
-const supportOrder = [
+const defaultSupportStatuses = [
+  "Unknown",
   "Confirmed Supporter",
   "Leaning Supporter",
   "Undecided",
-  "Unknown",
   "Not Supporting",
   "Do Not Contact",
 ];
 
-const pickupOrder = [
-  "Not Contacted",
-  "Confirmed Pickup",
-  "On Route",
-  "Picked Up",
-  "At Polling Station",
-  "Completed",
-  "Issue",
-  "No Pickup Needed",
-];
-
-function percentage(value: number, total: number) {
-  if (total <= 0) return 0;
-  return Math.round((value / total) * 100);
-}
-
-function clampPercentage(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(Math.max(value, 0), 100);
+function normalizeVoter(item: RawVoter): Voter {
+  return {
+    ...item,
+    campaigners: Array.isArray(item.campaigners)
+      ? item.campaigners[0] || null
+      : item.campaigners || null,
+  };
 }
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value || 0);
+}
+
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function cleanText(value: string | null | undefined) {
+  return value?.trim() || "";
 }
 
 function getDisplayName(voter: Voter) {
@@ -146,164 +228,77 @@ function getRegNo(voter: Voter) {
   return voter.voter_reg_no || voter.voter_number || "No reg no.";
 }
 
-function getSupportStatus(voter: Voter) {
-  return voter.support_status || "Unknown";
+function getAddress(voter: Voter) {
+  return voter.street_name || voter.address || "";
 }
 
-function getPickupStatus(voter: Voter) {
-  return voter.pickup_status || "Not Contacted";
+function getPollingArea(voter: Voter) {
+  return voter.polling_area || voter.polling_station || "";
 }
 
-function getVictoryStatus(projectedVotes: number, confirmed: number, target: number) {
-  if (!target || target <= 0) {
-    return {
-      label: "Set Target",
-      tone: "slate" as Tone,
-      description: "Add a vote target in Campaign Setup.",
-    };
+function supportPillClass(value: string | null) {
+  if (value === "Confirmed Supporter") return "bg-green-100 text-green-800";
+  if (value === "Leaning Supporter") return "bg-purple-100 text-purple-800";
+  if (value === "Undecided") return "bg-amber-100 text-amber-800";
+  if (value === "Not Supporting" || value === "Do Not Contact") {
+    return "bg-red-100 text-red-800";
   }
 
-  const projectedRate = projectedVotes / target;
-  const confirmedRate = confirmed / target;
-
-  if (confirmedRate >= 1) {
-    return {
-      label: "Strong Position",
-      tone: "green" as Tone,
-      description: "Confirmed supporters meet or exceed the target.",
-    };
-  }
-
-  if (projectedRate >= 1.15) {
-    return {
-      label: "Strong Lead",
-      tone: "green" as Tone,
-      description: "Projected vote strength is comfortably above target.",
-    };
-  }
-
-  if (projectedRate >= 1) {
-    return {
-      label: "On Track",
-      tone: "blue" as Tone,
-      description: "Projected vote strength meets the target.",
-    };
-  }
-
-  if (projectedRate >= 0.9) {
-    return {
-      label: "Close Race",
-      tone: "amber" as Tone,
-      description: "Projected vote strength is close but below target.",
-    };
-  }
-
-  if (projectedRate >= 0.75) {
-    return {
-      label: "At Risk",
-      tone: "orange" as Tone,
-      description: "More confirmed supporters are needed.",
-    };
-  }
-
-  return {
-    label: "Critical Gap",
-    tone: "red" as Tone,
-    description: "Confirmed and projected support are far below target.",
-  };
+  return "bg-slate-100 text-slate-700";
 }
 
-function textClass(tone: Tone | string) {
-  if (tone === "green") return "text-green-700";
-  if (tone === "blue") return "text-blue-700";
-  if (tone === "amber") return "text-amber-700";
-  if (tone === "orange") return "text-orange-700";
-  if (tone === "red") return "text-red-700";
-  if (tone === "purple") return "text-purple-700";
+function groupSummary(voters: Voter[], keyGetter: (voter: Voter) => string) {
+  const map = new Map<string, SummaryRow>();
 
-  return "text-slate-700";
-}
+  voters.forEach((voter) => {
+    const label = keyGetter(voter) || "Not Set";
 
-function bgClass(tone: Tone | string) {
-  if (tone === "green") return "bg-green-50";
-  if (tone === "blue") return "bg-blue-50";
-  if (tone === "amber") return "bg-amber-50";
-  if (tone === "orange") return "bg-orange-50";
-  if (tone === "red") return "bg-red-50";
-  if (tone === "purple") return "bg-purple-50";
+    if (!map.has(label)) {
+      map.set(label, {
+        label,
+        total: 0,
+        confirmed: 0,
+        leaning: 0,
+        notSupporting: 0,
+        undecidedUnknown: 0,
+        voted: 0,
+        notVoted: 0,
+        pickupNeeded: 0,
+      });
+    }
 
-  return "bg-slate-50";
-}
+    const item = map.get(label)!;
 
-function borderClass(tone: Tone | string) {
-  if (tone === "green") return "border-green-100";
-  if (tone === "blue") return "border-blue-100";
-  if (tone === "amber") return "border-amber-100";
-  if (tone === "orange") return "border-orange-100";
-  if (tone === "red") return "border-red-100";
-  if (tone === "purple") return "border-purple-100";
+    item.total += 1;
 
-  return "border-slate-200";
-}
+    if (voter.support_status === "Confirmed Supporter") item.confirmed += 1;
+    if (voter.support_status === "Leaning Supporter") item.leaning += 1;
+    if (voter.support_status === "Not Supporting") item.notSupporting += 1;
+    if (
+      !voter.support_status ||
+      voter.support_status === "Unknown" ||
+      voter.support_status === "Undecided"
+    ) {
+      item.undecidedUnknown += 1;
+    }
 
-function badgeClass(tone: Tone | string) {
-  if (tone === "green") return "bg-green-100 text-green-800";
-  if (tone === "blue") return "bg-blue-100 text-blue-800";
-  if (tone === "amber") return "bg-amber-100 text-amber-800";
-  if (tone === "orange") return "bg-orange-100 text-orange-800";
-  if (tone === "red") return "bg-red-100 text-red-800";
-  if (tone === "purple") return "bg-purple-100 text-purple-800";
+    if (voter.voted) item.voted += 1;
+    else item.notVoted += 1;
 
-  return "bg-slate-100 text-slate-800";
-}
-
-function progressClass(tone: Tone | string) {
-  if (tone === "green") return "bg-green-600";
-  if (tone === "blue") return "bg-blue-600";
-  if (tone === "amber") return "bg-amber-500";
-  if (tone === "orange") return "bg-orange-500";
-  if (tone === "red") return "bg-red-600";
-  if (tone === "purple") return "bg-purple-600";
-
-  return "bg-slate-600";
-}
-
-function csvValue(value: unknown) {
-  if (value === null || value === undefined) return "";
-
-  const stringValue = String(value).replace(/"/g, '""');
-
-  if (
-    stringValue.includes(",") ||
-    stringValue.includes("\n") ||
-    stringValue.includes('"')
-  ) {
-    return `"${stringValue}"`;
-  }
-
-  return stringValue;
-}
-
-function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
-  if (rows.length === 0) {
-    alert("No data available to export.");
-    return;
-  }
-
-  const headers = Object.keys(rows[0]);
-
-  const csv = [
-    headers.map(csvValue).join(","),
-    ...rows.map((row) => headers.map((header) => csvValue(row[header])).join(",")),
-  ].join("\n");
-
-  const blob = new Blob([csv], {
-    type: "text/csv;charset=utf-8;",
+    if (voter.pickup_needed) item.pickupNeeded += 1;
   });
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  return Array.from(map.values()).sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    return a.label.localeCompare(b.label);
+  });
+}
 
+function downloadText(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   link.click();
@@ -311,163 +306,107 @@ function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   URL.revokeObjectURL(url);
 }
 
-function ProgressBar({ value, tone = "blue" }: { value: number; tone?: Tone | string }) {
+function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
-      <div
-        className={`h-2.5 rounded-full ${progressClass(tone)}`}
-        style={{ width: `${clampPercentage(value)}%` }}
-      />
-    </div>
+    <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
   );
 }
 
-function SectionHeader({
-  title,
-  subtitle,
-  action,
-}: {
-  title: string;
-  subtitle: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <h2 className="break-words text-xl font-black text-slate-900 sm:text-2xl">
-          {title}
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
-      </div>
-
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  );
-}
-
-function CompactMetric({
+function SummaryCard({
   label,
   value,
-  tone = "slate",
   detail,
+  tone = "slate",
 }: {
   label: string;
   value: string | number;
-  tone?: Tone;
   detail?: string;
+  tone?: "blue" | "green" | "red" | "amber" | "purple" | "slate";
 }) {
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-b-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-600">{label}</p>
-        {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
-      </div>
+  const color =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
+      : tone === "green"
+      ? "border-green-100 bg-green-50 text-green-700"
+      : tone === "red"
+      ? "border-red-100 bg-red-50 text-red-700"
+      : tone === "amber"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : tone === "purple"
+      ? "border-purple-100 bg-purple-50 text-purple-700"
+      : "border-slate-200 bg-white text-slate-900";
 
-      <p className={`shrink-0 text-xl font-black ${textClass(tone)}`}>
-        {value}
+  return (
+    <div className={`rounded-3xl border p-4 shadow-sm ${color}`}>
+      <p className="text-xs font-black uppercase tracking-wide opacity-65">
+        {label}
       </p>
+      <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
+      {detail && <p className="mt-1 text-xs font-semibold opacity-70">{detail}</p>}
     </div>
   );
 }
 
-function DesktopStatCard({
-  title,
+function SelectField({
   value,
-  subtitle,
-  tone,
+  onChange,
+  children,
 }: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  tone: Tone;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
 }) {
   return (
-    <div
-      className={`min-w-0 rounded-3xl border p-5 shadow-sm ${bgClass(
-        tone
-      )} ${borderClass(tone)}`}
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
     >
-      <p className={`text-sm font-semibold ${textClass(tone)}`}>{title}</p>
-      <h3 className="mt-2 break-words text-4xl font-black text-slate-900">
-        {value}
-      </h3>
-      <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
-    </div>
-  );
-}
-
-function ReportRow({
-  label,
-  value,
-  percent,
-  tone,
-}: {
-  label: string;
-  value: number;
-  percent: number;
-  tone: Tone;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 p-3 sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-black text-slate-900">{label}</p>
-          <p className="text-xs text-slate-500 sm:text-sm">
-            {formatNumber(value)} voters
-          </p>
-        </div>
-
-        <p className={`shrink-0 text-xl font-black sm:text-2xl ${textClass(tone)}`}>
-          {percent}%
-        </p>
-      </div>
-
-      <div className="mt-2 sm:mt-3">
-        <ProgressBar value={percent} tone={tone} />
-      </div>
-    </div>
-  );
-}
-
-function ExportChip({
-  label,
-  onClick,
-  primary,
-}: {
-  label: string;
-  onClick: () => void;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 rounded-full px-4 py-2 text-sm font-black ${
-        primary
-          ? "bg-blue-700 text-white"
-          : "border border-slate-200 bg-white text-slate-700"
-      }`}
-    >
-      {label}
-    </button>
+      {children}
+    </select>
   );
 }
 
 export default function ReportsPage() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
-  const [settings, setSettings] = useState<CampaignSettings | null>(null);
-  const [voters, setVoters] = useState<Voter[]>([]);
   const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
+  const [campaignZones, setCampaignZones] = useState<CampaignZone[]>([]);
+  const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
+  const [supportStatusOptions, setSupportStatusOptions] = useState<
+    SupportStatusOption[]
+  >([]);
+  const [voters, setVoters] = useState<Voter[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [message, setMessage] = useState("");
 
+  const [reportType, setReportType] = useState<ReportType>("filtered");
+  const [search, setSearch] = useState("");
+  const [supportFilter, setSupportFilter] = useState("All");
+  const [zoneFilter, setZoneFilter] = useState("All");
+  const [pollingFilter, setPollingFilter] = useState("All");
+  const [campaignerFilter, setCampaignerFilter] = useState("All");
+  const [assignmentFilter, setAssignmentFilter] = useState("All");
+  const [votedFilter, setVotedFilter] = useState("All");
+  const [includeVoterList, setIncludeVoterList] = useState(true);
+
+  const canAccess = profile?.role === "Campaign Manager";
+
   useEffect(() => {
-    loadReports();
+    loadPage();
   }, []);
 
-  async function loadReports() {
-    setRefreshing(true);
+  useEffect(() => {
+    if (profile && canAccess) {
+      loadReportData();
+    }
+  }, [profile, canAccess]);
+
+  async function loadPage() {
+    setLoading(true);
     setMessage("");
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -476,7 +415,6 @@ export default function ReportsPage() {
     if (!email) {
       setMessage("No login email found.");
       setLoading(false);
-      setRefreshing(false);
       return;
     }
 
@@ -490,484 +428,613 @@ export default function ReportsPage() {
       console.error("Profile error:", profileError);
       setMessage("Error loading your team profile.");
       setLoading(false);
-      setRefreshing(false);
       return;
     }
 
     if (!profileData) {
       setMessage("No Team Rigo profile found for this login email.");
       setLoading(false);
-      setRefreshing(false);
       return;
     }
 
     setProfile(profileData);
 
-    const [settingsResult, votersResult, campaignersResult] = await Promise.all([
-      supabase
-        .from("campaign_settings")
-        .select("id, election_name, vote_target_to_win")
-        .eq("id", 1)
-        .maybeSingle(),
+    const [campaignerResult, zoneResult, pollingResult, supportResult] =
+      await Promise.all([
+        supabase
+          .from("campaigners")
+          .select("id, full_name, email, phone, zone, role")
+          .order("full_name", { ascending: true }),
 
-      supabase
-        .from("voters")
-        .select(
-          `
-          id,
-          voter_reg_no,
-          voter_number,
-          first_name,
-          middle_name,
-          last_name,
-          full_name,
-          contact_no,
-          phone,
-          street_name,
-          address,
-          zone,
-          polling_area,
-          support_status,
-          pickup_needed,
-          pickup_status,
-          voted,
-          voted_at,
-          campaigner_id,
-          notes
-        `
-        )
-        .order("last_name", { ascending: true, nullsFirst: false })
-        .order("first_name", { ascending: true, nullsFirst: false })
-        .range(0, 49999),
+        supabase
+          .from("campaign_zones")
+          .select("id, name, description, display_order")
+          .order("display_order", { ascending: true })
+          .order("name", { ascending: true }),
 
-      supabase
-        .from("campaigners")
-        .select("id, full_name, role, zone")
-        .order("full_name", { ascending: true }),
-    ]);
+        supabase
+          .from("polling_areas")
+          .select("id, code, name, location, display_order")
+          .order("display_order", { ascending: true })
+          .order("code", { ascending: true }),
 
-    if (settingsResult.error) {
-      console.error("Settings error:", settingsResult.error);
-      setSettings(null);
-    } else {
-      setSettings(settingsResult.data || null);
-    }
+        supabase
+          .from("support_status_options")
+          .select("id, value, label, description, color, display_order, is_active")
+          .eq("is_active", true)
+          .order("display_order", { ascending: true })
+          .order("label", { ascending: true }),
+      ]);
 
-    if (votersResult.error) {
-      console.error("Voters report error:", votersResult.error);
-      setMessage("Error loading voter report data.");
-      setVoters([]);
-    } else {
-      setVoters(votersResult.data || []);
-    }
-
-    if (campaignersResult.error) {
-      console.error("Campaigners report error:", campaignersResult.error);
+    if (campaignerResult.error) {
+      console.error("Campaigners error:", campaignerResult.error);
       setCampaigners([]);
     } else {
-      setCampaigners(campaignersResult.data || []);
+      setCampaigners(campaignerResult.data || []);
+    }
+
+    if (zoneResult.error) {
+      console.error("Zones error:", zoneResult.error);
+      setCampaignZones([]);
+    } else {
+      setCampaignZones(zoneResult.data || []);
+    }
+
+    if (pollingResult.error) {
+      console.error("Polling areas error:", pollingResult.error);
+      setPollingAreas([]);
+    } else {
+      setPollingAreas(pollingResult.data || []);
+    }
+
+    if (supportResult.error) {
+      console.error("Support status options error:", supportResult.error);
+      setSupportStatusOptions([]);
+    } else {
+      setSupportStatusOptions(supportResult.data || []);
     }
 
     setLoading(false);
-    setRefreshing(false);
   }
 
-  const campaignerNameMap = useMemo(() => {
-    const map = new Map<string, string>();
+  async function loadReportData() {
+    setLoadingReport(true);
+    setMessage("");
 
-    campaigners.forEach((person) => {
-      map.set(person.id, person.full_name);
+    const { data, error } = await supabase
+      .from("voters")
+      .select(voterSelect)
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false })
+      .range(0, 49999);
+
+    if (error) {
+      console.error("Reports voter load error:", error);
+      setMessage(error.message || "Error loading report data.");
+      setVoters([]);
+      setLoadingReport(false);
+      return;
+    }
+
+    const normalized = ((data || []) as RawVoter[]).map(normalizeVoter);
+    setVoters(normalized);
+    setLoadingReport(false);
+  }
+
+  const supportStatuses = useMemo(() => {
+    const activeOptions = supportStatusOptions
+      .filter((item) => item.is_active !== false)
+      .map((item) => item.value);
+
+    return activeOptions.length > 0 ? activeOptions : defaultSupportStatuses;
+  }, [supportStatusOptions]);
+
+  function getSupportLabel(value: string | null) {
+    const cleanValue = value || "Unknown";
+    const option = supportStatusOptions.find((item) => item.value === cleanValue);
+
+    return option?.label || cleanValue;
+  }
+
+  const zoneOptions = useMemo(() => {
+    const zones = new Set<string>();
+
+    campaignZones.forEach((zone) => {
+      if (zone.name) zones.add(zone.name);
     });
 
-    return map;
+    voters.forEach((voter) => {
+      if (voter.zone) zones.add(voter.zone);
+    });
+
+    return Array.from(zones).sort();
+  }, [campaignZones, voters]);
+
+  const pollingOptions = useMemo(() => {
+    const areas = new Set<string>();
+
+    pollingAreas.forEach((area) => {
+      if (area.code) areas.add(area.code);
+    });
+
+    voters.forEach((voter) => {
+      const value = getPollingArea(voter);
+      if (value) areas.add(value);
+    });
+
+    return Array.from(areas).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true })
+    );
+  }, [pollingAreas, voters]);
+
+  function pollingLabel(code: string) {
+    const area = pollingAreas.find((item) => item.code === code);
+    if (!area) return code;
+
+    return area.name ? `${area.code} - ${area.name}` : area.code;
+  }
+
+  const campaignerOptions = useMemo(() => {
+    return campaigners.filter((person) => person.role === "Campaigner");
   }, [campaigners]);
 
-  const stats = useMemo(() => {
-    const total = voters.length;
-    const target = settings?.vote_target_to_win || 0;
+  const filteredVoters = useMemo(() => {
+    const cleanSearch = search.trim().toLowerCase();
 
-    const confirmed = voters.filter(
-      (voter) => getSupportStatus(voter) === "Confirmed Supporter"
+    return voters.filter((voter) => {
+      const campaignerName = voter.campaigners?.full_name || "";
+
+      const matchesSearch =
+        !cleanSearch ||
+        getDisplayName(voter).toLowerCase().includes(cleanSearch) ||
+        getRegNo(voter).toLowerCase().includes(cleanSearch) ||
+        cleanText(voter.contact_no || voter.phone)
+          .toLowerCase()
+          .includes(cleanSearch) ||
+        getAddress(voter).toLowerCase().includes(cleanSearch) ||
+        (voter.zone || "").toLowerCase().includes(cleanSearch) ||
+        getPollingArea(voter).toLowerCase().includes(cleanSearch) ||
+        campaignerName.toLowerCase().includes(cleanSearch);
+
+      const matchesSupport =
+        supportFilter === "All" || (voter.support_status || "Unknown") === supportFilter;
+
+      const matchesZone = zoneFilter === "All" || voter.zone === zoneFilter;
+
+      const matchesPolling =
+        pollingFilter === "All" || getPollingArea(voter) === pollingFilter;
+
+      const matchesCampaigner =
+        campaignerFilter === "All" || voter.campaigner_id === campaignerFilter;
+
+      const matchesAssignment =
+        assignmentFilter === "All" ||
+        (assignmentFilter === "Assigned" && !!voter.campaigner_id) ||
+        (assignmentFilter === "Unassigned" && !voter.campaigner_id);
+
+      const matchesVoted =
+        votedFilter === "All" ||
+        (votedFilter === "Voted" && voter.voted) ||
+        (votedFilter === "Not Voted" && !voter.voted);
+
+      return (
+        matchesSearch &&
+        matchesSupport &&
+        matchesZone &&
+        matchesPolling &&
+        matchesCampaigner &&
+        matchesAssignment &&
+        matchesVoted
+      );
+    });
+  }, [
+    voters,
+    search,
+    supportFilter,
+    zoneFilter,
+    pollingFilter,
+    campaignerFilter,
+    assignmentFilter,
+    votedFilter,
+  ]);
+
+  const reportVoters = useMemo(() => {
+    if (reportType === "unassigned") {
+      return filteredVoters.filter((voter) => !voter.campaigner_id);
+    }
+
+    return filteredVoters;
+  }, [filteredVoters, reportType]);
+
+  const summaryRows = useMemo(() => {
+    if (reportType === "support_status") {
+      return groupSummary(reportVoters, (voter) =>
+        getSupportLabel(voter.support_status)
+      );
+    }
+
+    if (reportType === "zone") {
+      return groupSummary(reportVoters, (voter) => voter.zone || "No Zone");
+    }
+
+    if (reportType === "polling_area") {
+      return groupSummary(reportVoters, (voter) => getPollingArea(voter) || "No Polling Area");
+    }
+
+    if (reportType === "campaigner") {
+      return groupSummary(
+        reportVoters,
+        (voter) => voter.campaigners?.full_name || "Unassigned"
+      );
+    }
+
+    if (reportType === "unassigned") {
+      return groupSummary(reportVoters, () => "Unassigned");
+    }
+
+    if (reportType === "voted_status") {
+      return groupSummary(reportVoters, (voter) =>
+        voter.voted ? "Voted" : "Not Voted"
+      );
+    }
+
+    return groupSummary(reportVoters, () => "Filtered Voters");
+  }, [reportType, reportVoters, supportStatusOptions]);
+
+  const totals = useMemo(() => {
+    const confirmed = reportVoters.filter(
+      (voter) => voter.support_status === "Confirmed Supporter"
     ).length;
-
-    const leaning = voters.filter(
-      (voter) => getSupportStatus(voter) === "Leaning Supporter"
+    const leaning = reportVoters.filter(
+      (voter) => voter.support_status === "Leaning Supporter"
     ).length;
-
-    const undecided = voters.filter(
-      (voter) => getSupportStatus(voter) === "Undecided"
+    const notSupporting = reportVoters.filter(
+      (voter) => voter.support_status === "Not Supporting"
     ).length;
-
-    const unknown = voters.filter(
-      (voter) => getSupportStatus(voter) === "Unknown"
-    ).length;
-
-    const pickupIssues = voters.filter(
-      (voter) => getPickupStatus(voter) === "Issue"
-    ).length;
-
-    const voted = voters.filter((voter) => voter.voted).length;
-
-    const confirmedVoted = voters.filter(
-      (voter) => voter.voted && getSupportStatus(voter) === "Confirmed Supporter"
-    ).length;
-
-    const confirmedNotVoted = voters.filter(
-      (voter) => !voter.voted && getSupportStatus(voter) === "Confirmed Supporter"
-    ).length;
-
-    const confirmedPickupNotVoted = voters.filter(
-      (voter) =>
-        !voter.voted &&
-        voter.pickup_needed &&
-        getSupportStatus(voter) === "Confirmed Supporter"
-    ).length;
-
-    const assigned = voters.filter((voter) => voter.campaigner_id).length;
-    const projectedVotes = Math.round(confirmed + leaning * 0.5);
-
-    const victoryStatus = getVictoryStatus(projectedVotes, confirmed, target);
+    const voted = reportVoters.filter((voter) => voter.voted).length;
+    const pickupNeeded = reportVoters.filter((voter) => voter.pickup_needed).length;
+    const unassigned = reportVoters.filter((voter) => !voter.campaigner_id).length;
 
     return {
-      total,
-      target,
+      total: reportVoters.length,
       confirmed,
       leaning,
-      undecided,
-      unknown,
-      pickupIssues,
+      notSupporting,
       voted,
-      confirmedVoted,
-      confirmedNotVoted,
-      confirmedPickupNotVoted,
-      assigned,
-      unassigned: total - assigned,
-      projectedVotes,
-      targetProgress: percentage(projectedVotes, target),
-      confirmedProgress: percentage(confirmed, target),
-      turnoutRate: percentage(voted, total),
-      confirmedTurnoutRate: percentage(confirmedVoted, confirmed),
-      assignmentRate: percentage(assigned, total),
-      votesNeededFromProjected: Math.max(0, target - projectedVotes),
-      votesNeededFromConfirmed: Math.max(0, target - confirmed),
-      projectedCushion: projectedVotes - target,
-      victoryStatus,
+      notVoted: reportVoters.length - voted,
+      pickupNeeded,
+      unassigned,
     };
-  }, [voters, settings]);
+  }, [reportVoters]);
 
-  const supportReport = useMemo(() => {
-    const map = new Map<string, number>();
+  const selectedReport =
+    reportTypes.find((item) => item.value === reportType) || reportTypes[0];
 
-    voters.forEach((voter) => {
-      const status = getSupportStatus(voter);
-      map.set(status, (map.get(status) || 0) + 1);
-    });
-
-    const knownRows = supportOrder.map((status) => ({
-      status,
-      total: map.get(status) || 0,
-      percentage: percentage(map.get(status) || 0, voters.length),
-    }));
-
-    const otherRows = Array.from(map.entries())
-      .filter(([status]) => !supportOrder.includes(status))
-      .map(([status, total]) => ({
-        status,
-        total,
-        percentage: percentage(total, voters.length),
-      }));
-
-    return [...knownRows, ...otherRows].filter((row) => row.total > 0);
-  }, [voters]);
-
-  const pickupReport = useMemo(() => {
-    const map = new Map<string, number>();
-
-    voters.forEach((voter) => {
-      const status = getPickupStatus(voter);
-      map.set(status, (map.get(status) || 0) + 1);
-    });
-
-    const knownRows = pickupOrder.map((status) => ({
-      status,
-      total: map.get(status) || 0,
-      percentage: percentage(map.get(status) || 0, voters.length),
-    }));
-
-    const otherRows = Array.from(map.entries())
-      .filter(([status]) => !pickupOrder.includes(status))
-      .map(([status, total]) => ({
-        status,
-        total,
-        percentage: percentage(total, voters.length),
-      }));
-
-    return [...knownRows, ...otherRows].filter((row) => row.total > 0);
-  }, [voters]);
-
-  const zoneReport = useMemo(() => {
-    const map = new Map<string, ZoneReport>();
-
-    voters.forEach((voter) => {
-      const zone = voter.zone || "No Zone";
-
-      if (!map.has(zone)) {
-        map.set(zone, {
-          zone,
-          total: 0,
-          confirmed: 0,
-          leaning: 0,
-          undecided: 0,
-          unknown: 0,
-          projected: 0,
-          voted: 0,
-          confirmedVoted: 0,
-          confirmedRemaining: 0,
-          pickupNeeded: 0,
-          pickupIssues: 0,
-          unassigned: 0,
-        });
-      }
-
-      const item = map.get(zone)!;
-      const supportStatus = getSupportStatus(voter);
-      const pickupStatus = getPickupStatus(voter);
-
-      item.total += 1;
-
-      if (supportStatus === "Confirmed Supporter") {
-        item.confirmed += 1;
-
-        if (voter.voted) {
-          item.confirmedVoted += 1;
-        } else {
-          item.confirmedRemaining += 1;
-        }
-      }
-
-      if (supportStatus === "Leaning Supporter") item.leaning += 1;
-      if (supportStatus === "Undecided") item.undecided += 1;
-      if (supportStatus === "Unknown") item.unknown += 1;
-      if (voter.voted) item.voted += 1;
-      if (voter.pickup_needed) item.pickupNeeded += 1;
-      if (pickupStatus === "Issue") item.pickupIssues += 1;
-      if (!voter.campaigner_id) item.unassigned += 1;
-    });
-
-    return Array.from(map.values())
-      .map((item) => ({
-        ...item,
-        projected: Math.round(item.confirmed + item.leaning * 0.5),
-      }))
-      .sort((a, b) => a.zone.localeCompare(b.zone));
-  }, [voters]);
-
-  const pollingReport = useMemo(() => {
-    const map = new Map<string, PollingReport>();
-
-    voters.forEach((voter) => {
-      const pollingArea = voter.polling_area || "No Polling Area";
-
-      if (!map.has(pollingArea)) {
-        map.set(pollingArea, {
-          pollingArea,
-          total: 0,
-          confirmed: 0,
-          leaning: 0,
-          projected: 0,
-          voted: 0,
-          confirmedVoted: 0,
-          confirmedRemaining: 0,
-          pickupNeeded: 0,
-          pickupIssues: 0,
-        });
-      }
-
-      const item = map.get(pollingArea)!;
-      const supportStatus = getSupportStatus(voter);
-      const pickupStatus = getPickupStatus(voter);
-
-      item.total += 1;
-
-      if (supportStatus === "Confirmed Supporter") {
-        item.confirmed += 1;
-
-        if (voter.voted) {
-          item.confirmedVoted += 1;
-        } else {
-          item.confirmedRemaining += 1;
-        }
-      }
-
-      if (supportStatus === "Leaning Supporter") item.leaning += 1;
-      if (voter.voted) item.voted += 1;
-      if (voter.pickup_needed) item.pickupNeeded += 1;
-      if (pickupStatus === "Issue") item.pickupIssues += 1;
-    });
-
-    return Array.from(map.values())
-      .map((item) => ({
-        ...item,
-        projected: Math.round(item.confirmed + item.leaning * 0.5),
-      }))
-      .sort((a, b) => a.pollingArea.localeCompare(b.pollingArea));
-  }, [voters]);
-
-  const campaignerReport = useMemo(() => {
-    return campaigners
-      .filter((person) => person.role === "Campaigner")
-      .map((person) => {
-        const assignedVoters = voters.filter(
-          (voter) => voter.campaigner_id === person.id
-        );
-
-        const confirmed = assignedVoters.filter(
-          (voter) => getSupportStatus(voter) === "Confirmed Supporter"
-        ).length;
-
-        const leaning = assignedVoters.filter(
-          (voter) => getSupportStatus(voter) === "Leaning Supporter"
-        ).length;
-
-        const voted = assignedVoters.filter((voter) => voter.voted).length;
-
-        const confirmedVoted = assignedVoters.filter(
-          (voter) =>
-            voter.voted && getSupportStatus(voter) === "Confirmed Supporter"
-        ).length;
-
-        const pickupNeeded = assignedVoters.filter(
-          (voter) => voter.pickup_needed
-        ).length;
-
-        const pickupIssues = assignedVoters.filter(
-          (voter) => getPickupStatus(voter) === "Issue"
-        ).length;
-
-        return {
-          id: person.id,
-          name: person.full_name,
-          zone: person.zone,
-          assigned: assignedVoters.length,
-          confirmed,
-          leaning,
-          projected: Math.round(confirmed + leaning * 0.5),
-          voted,
-          confirmedVoted,
-          pickupNeeded,
-          pickupIssues,
-        };
-      })
-      .sort((a, b) => b.confirmed - a.confirmed);
-  }, [campaigners, voters]);
-
-  const confirmedNotVotedList = useMemo(() => {
-    return voters
-      .filter(
-        (voter) =>
-          !voter.voted && getSupportStatus(voter) === "Confirmed Supporter"
-      )
-      .slice(0, 10);
-  }, [voters]);
-
-  const pickupRiskList = useMemo(() => {
-    return voters
-      .filter(
-        (voter) =>
-          !voter.voted &&
-          voter.pickup_needed &&
-          getSupportStatus(voter) === "Confirmed Supporter"
-      )
-      .slice(0, 10);
-  }, [voters]);
-
-  function exportFullVoterReport() {
-    downloadCsv(
-      "team-rigo-voter-report.csv",
-      voters.map((voter) => ({
-        reg_no: getRegNo(voter),
-        name: getDisplayName(voter),
-        contact: voter.contact_no || voter.phone || "",
-        street: voter.street_name || voter.address || "",
-        zone: voter.zone || "",
-        polling_area: voter.polling_area || "",
-        support_status: getSupportStatus(voter),
-        campaigner: voter.campaigner_id
-          ? campaignerNameMap.get(voter.campaigner_id) || ""
-          : "",
-        pickup_needed: voter.pickup_needed ? "Yes" : "No",
-        pickup_status: getPickupStatus(voter),
-        voted: voter.voted ? "Yes" : "No",
-        voted_at: voter.voted_at || "",
-        notes: voter.notes || "",
-      }))
-    );
+  function clearFilters() {
+    setSearch("");
+    setSupportFilter("All");
+    setZoneFilter("All");
+    setPollingFilter("All");
+    setCampaignerFilter("All");
+    setAssignmentFilter("All");
+    setVotedFilter("All");
   }
 
-  function exportZoneReport() {
-    downloadCsv(
-      "team-rigo-zone-report.csv",
-      zoneReport.map((item) => ({
-        zone: item.zone,
-        total: item.total,
-        confirmed: item.confirmed,
-        leaning: item.leaning,
-        projected: item.projected,
-        confirmed_voted: item.confirmedVoted,
-        confirmed_remaining: item.confirmedRemaining,
-        pickup_needed: item.pickupNeeded,
-        pickup_issues: item.pickupIssues,
-        unassigned: item.unassigned,
-      }))
-    );
+  function activeFilterText() {
+    const parts = [
+      `Report: ${selectedReport.label}`,
+      supportFilter !== "All" ? `Support: ${getSupportLabel(supportFilter)}` : "",
+      zoneFilter !== "All" ? `Zone: ${zoneFilter}` : "",
+      pollingFilter !== "All" ? `Polling: ${pollingLabel(pollingFilter)}` : "",
+      campaignerFilter !== "All"
+        ? `Campaigner: ${
+            campaignerOptions.find((item) => item.id === campaignerFilter)
+              ?.full_name || campaignerFilter
+          }`
+        : "",
+      assignmentFilter !== "All" ? `Assignment: ${assignmentFilter}` : "",
+      votedFilter !== "All" ? `Voted: ${votedFilter}` : "",
+      search.trim() ? `Search: ${search.trim()}` : "",
+    ].filter(Boolean);
+
+    return parts.join(" | ");
   }
 
-  function exportPollingReport() {
-    downloadCsv(
-      "team-rigo-polling-report.csv",
-      pollingReport.map((item) => ({
-        polling_area: item.pollingArea,
-        total: item.total,
-        confirmed: item.confirmed,
-        leaning: item.leaning,
-        projected: item.projected,
-        voted: item.voted,
-        confirmed_voted: item.confirmedVoted,
-        confirmed_remaining: item.confirmedRemaining,
-        pickup_needed: item.pickupNeeded,
-        pickup_issues: item.pickupIssues,
-      }))
-    );
+  function summaryTableHtml() {
+    return `
+      <table>
+        <thead>
+          <tr>
+            <th>Group</th>
+            <th>Total</th>
+            <th>Confirmed</th>
+            <th>Leaning</th>
+            <th>Not Supporting</th>
+            <th>Undecided/Unknown</th>
+            <th>Voted</th>
+            <th>Not Voted</th>
+            <th>Pickup</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRows
+            .map(
+              (row) => `
+                <tr>
+                  <td>${escapeHtml(row.label)}</td>
+                  <td>${formatNumber(row.total)}</td>
+                  <td>${formatNumber(row.confirmed)}</td>
+                  <td>${formatNumber(row.leaning)}</td>
+                  <td>${formatNumber(row.notSupporting)}</td>
+                  <td>${formatNumber(row.undecidedUnknown)}</td>
+                  <td>${formatNumber(row.voted)}</td>
+                  <td>${formatNumber(row.notVoted)}</td>
+                  <td>${formatNumber(row.pickupNeeded)}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
+    `;
   }
 
-  function exportCampaignerReport() {
-    downloadCsv(
-      "team-rigo-campaigner-report.csv",
-      campaignerReport.map((item) => ({
-        campaigner: item.name,
-        zone: item.zone || "",
-        assigned: item.assigned,
-        confirmed: item.confirmed,
-        leaning: item.leaning,
-        projected: item.projected,
-        voted: item.voted,
-        confirmed_voted: item.confirmedVoted,
-        pickup_needed: item.pickupNeeded,
-        pickup_issues: item.pickupIssues,
-      }))
-    );
+  function voterListTableHtml() {
+    const rows = reportVoters.slice(0, 2000);
+
+    return `
+      <h2>Voter List</h2>
+      <p class="note">Showing ${formatNumber(rows.length)} of ${formatNumber(
+        reportVoters.length
+      )} voter(s). For very large reports, export CSV for the full data list.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Reg No.</th>
+            <th>Name</th>
+            <th>Zone</th>
+            <th>Polling</th>
+            <th>Support</th>
+            <th>Campaigner</th>
+            <th>Voted</th>
+            <th>Pickup</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows
+            .map(
+              (voter) => `
+                <tr>
+                  <td>${escapeHtml(getRegNo(voter))}</td>
+                  <td>${escapeHtml(getDisplayName(voter))}</td>
+                  <td>${escapeHtml(voter.zone || "No Zone")}</td>
+                  <td>${escapeHtml(getPollingArea(voter) || "No Polling")}</td>
+                  <td>${escapeHtml(getSupportLabel(voter.support_status))}</td>
+                  <td>${escapeHtml(voter.campaigners?.full_name || "Unassigned")}</td>
+                  <td>${voter.voted ? "Voted" : "Not Voted"}</td>
+                  <td>${voter.pickup_needed ? "Needed" : "Not Needed"}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function exportPdf() {
+    const generatedAt = new Date().toLocaleString();
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(selectedReport.label)} - Team Rigo Report</title>
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: Arial, Helvetica, sans-serif;
+              color: #0f172a;
+              margin: 28px;
+              line-height: 1.35;
+            }
+            .header {
+              border-bottom: 3px solid #1d4ed8;
+              padding-bottom: 14px;
+              margin-bottom: 20px;
+            }
+            .brand {
+              font-size: 12px;
+              font-weight: 900;
+              letter-spacing: 0.14em;
+              text-transform: uppercase;
+              color: #1d4ed8;
+            }
+            h1 {
+              margin: 6px 0 4px;
+              font-size: 28px;
+              line-height: 1.1;
+            }
+            h2 {
+              font-size: 18px;
+              margin: 24px 0 10px;
+            }
+            .meta, .note {
+              color: #475569;
+              font-size: 12px;
+              margin: 4px 0;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 10px;
+              margin: 18px 0;
+            }
+            .stat {
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 10px;
+              background: #f8fafc;
+            }
+            .stat-label {
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              color: #64748b;
+              font-weight: 900;
+            }
+            .stat-value {
+              margin-top: 4px;
+              font-size: 20px;
+              font-weight: 900;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 8px;
+              page-break-inside: auto;
+              font-size: 11px;
+            }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            th {
+              text-align: left;
+              background: #eff6ff;
+              border: 1px solid #cbd5e1;
+              padding: 7px;
+              font-size: 10px;
+              text-transform: uppercase;
+            }
+            td {
+              border: 1px solid #e2e8f0;
+              padding: 7px;
+              vertical-align: top;
+            }
+            .disclaimer {
+              margin-top: 18px;
+              padding: 10px;
+              border-radius: 10px;
+              background: #fff7ed;
+              color: #9a3412;
+              font-size: 11px;
+              font-weight: 700;
+            }
+            @page { size: A4 landscape; margin: 14mm; }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="brand">Team Rigo Campaign Operations</div>
+            <h1>${escapeHtml(selectedReport.label)}</h1>
+            <p class="meta">${escapeHtml(selectedReport.description)}</p>
+            <p class="meta">Generated: ${escapeHtml(generatedAt)}</p>
+            <p class="meta">${escapeHtml(activeFilterText())}</p>
+          </div>
+
+          <div class="grid">
+            <div class="stat"><div class="stat-label">Total Voters</div><div class="stat-value">${formatNumber(
+              totals.total
+            )}</div></div>
+            <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-value">${formatNumber(
+              totals.confirmed
+            )}</div></div>
+            <div class="stat"><div class="stat-label">Not Supporting</div><div class="stat-value">${formatNumber(
+              totals.notSupporting
+            )}</div></div>
+            <div class="stat"><div class="stat-label">Voted</div><div class="stat-value">${formatNumber(
+              totals.voted
+            )}</div></div>
+          </div>
+
+          <h2>Summary</h2>
+          ${summaryTableHtml()}
+
+          ${includeVoterList ? voterListTableHtml() : ""}
+
+          <div class="disclaimer">
+            Reports are based on recorded campaign support status and operational voter records.
+            Voted status means a voter was marked by the election-day workflow; it is not a record of anyone's private ballot.
+          </div>
+
+          <script>
+            window.onload = function () {
+              window.focus();
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    if (!reportWindow) {
+      setMessage("Your browser blocked the PDF window. Allow pop-ups and try again.");
+      return;
+    }
+
+    reportWindow.document.open();
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+  }
+
+  function exportCsv() {
+    const header = [
+      "voter_reg_no",
+      "full_name",
+      "zone",
+      "polling_area",
+      "support_status",
+      "campaigner",
+      "contact_no",
+      "address",
+      "voted",
+      "pickup_needed",
+      "pickup_status",
+      "notes",
+    ];
+
+    const lines = [
+      header.join(","),
+      ...reportVoters.map((voter) =>
+        [
+          getRegNo(voter),
+          getDisplayName(voter),
+          voter.zone || "",
+          getPollingArea(voter),
+          getSupportLabel(voter.support_status),
+          voter.campaigners?.full_name || "Unassigned",
+          voter.contact_no || voter.phone || "",
+          getAddress(voter),
+          voter.voted ? "Voted" : "Not Voted",
+          voter.pickup_needed ? "Yes" : "No",
+          voter.pickup_status || "",
+          voter.notes || "",
+        ]
+          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+          .join(",")
+      ),
+    ];
+
+    const safeName = selectedReport.label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
+    downloadText(`${safeName || "report"}.csv`, lines.join("\n"), "text/csv");
   }
 
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl bg-white p-6 text-center shadow">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
-
-            <h1 className="mt-3 text-xl font-bold text-slate-900">
+          <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading reports...
             </h1>
           </div>
@@ -976,20 +1043,16 @@ export default function ReportsPage() {
     );
   }
 
-  if (profile?.role !== "Campaign Manager") {
+  if (!canAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
-        <div className="w-full max-w-xl rounded-2xl bg-white p-6 text-center shadow sm:p-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-            Team Rigo
-          </p>
-
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">
+        <div className="w-full max-w-xl rounded-3xl bg-white p-6 text-center shadow-sm sm:p-8">
+          <h1 className="text-2xl font-black text-slate-900">
             Campaign Manager Access Only
           </h1>
 
           <p className="mt-3 text-slate-600">
-            Reports are restricted to the Campaign Manager.
+            PDF reports are restricted to the Campaign Manager.
           </p>
         </div>
       </main>
@@ -998,469 +1061,284 @@ export default function ReportsPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100">
-      <section className="bg-slate-950 px-4 py-4 text-white sm:px-6 sm:py-8">
+      <section className="bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="flex min-w-0 flex-col gap-3 sm:gap-6 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
-                Team Rigo
-              </p>
-
-              <h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:mt-3 sm:text-4xl md:text-5xl">
-                Campaign Reports
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+                Reports
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm text-slate-300 sm:mt-3 sm:text-base">
-                {settings?.election_name || "Team Rigo Campaign"} ·{" "}
-                {profile?.full_name}
+              <p className="mt-2 max-w-3xl text-sm text-slate-500 sm:text-base">
+                Build and export PDF reports by support status, zone, polling
+                area, campaigner, unassigned voters, and voted status.
               </p>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:w-auto sm:grid-cols-3 sm:overflow-visible sm:pb-0 xl:flex">
-              <button
-                onClick={loadReports}
-                disabled={refreshing}
-                className="shrink-0 rounded-full bg-white px-4 py-2 text-sm font-black text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-5 sm:py-3"
-              >
-                {refreshing ? "..." : "Refresh"}
-              </button>
-
-              <Link
-                href="/dashboard"
-                className="shrink-0 rounded-full border border-white/20 px-4 py-2 text-center text-sm font-black text-white hover:bg-white/10 sm:rounded-2xl sm:px-5 sm:py-3"
-              >
-                Dashboard
-              </Link>
-
-              <button
-                onClick={exportFullVoterReport}
-                className="shrink-0 rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 sm:rounded-2xl sm:px-5 sm:py-3"
-              >
-                Export
-              </button>
-            </div>
+            <button
+              onClick={loadReportData}
+              className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 sm:w-auto"
+            >
+              {loadingReport ? "Refreshing..." : "Refresh Data"}
+            </button>
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm font-semibold text-red-100 sm:mt-6">
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
               {message}
             </div>
           )}
 
-          <div className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-4 shadow-xl sm:mt-8 sm:p-6">
-            <div className="flex min-w-0 items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-300 sm:text-sm">
-                  Victory Report
-                </p>
-
-                <h2 className="mt-1 break-words text-3xl font-black sm:mt-3 sm:text-5xl">
-                  {stats.victoryStatus.label}
-                </h2>
-              </div>
-
-              <span
-                className={`w-fit shrink-0 rounded-full px-3 py-1.5 text-xs font-black sm:px-4 sm:py-2 sm:text-sm ${badgeClass(
-                  stats.victoryStatus.tone
-                )}`}
-              >
-                {stats.projectedCushion >= 0
-                  ? `+${formatNumber(stats.projectedCushion)}`
-                  : `${formatNumber(stats.projectedCushion)}`}
-              </span>
-            </div>
-
-            <p className="mt-2 text-sm text-slate-300 sm:mt-3">
-              {stats.victoryStatus.description}
-            </p>
-
-            <div className="mt-4">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-slate-300">Projected</span>
-                <span className="font-black text-white">
-                  {formatNumber(stats.projectedVotes)} /{" "}
-                  {formatNumber(stats.target)}
-                </span>
-              </div>
-
-              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10 sm:h-4">
-                <div
-                  className={`h-3 rounded-full sm:h-4 ${progressClass(
-                    stats.victoryStatus.tone
-                  )}`}
-                  style={{
-                    width: `${clampPercentage(stats.targetProgress)}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
-              <CompactMetric
-                label="Confirmed"
-                value={formatNumber(stats.confirmed)}
-                tone="green"
-              />
-
-              <CompactMetric
-                label="Projected Need"
-                value={formatNumber(stats.votesNeededFromProjected)}
-                tone={stats.votesNeededFromProjected > 0 ? "red" : "green"}
-              />
-
-              <CompactMetric
-                label="Not Voted"
-                value={formatNumber(stats.confirmedNotVoted)}
-                tone="amber"
-              />
-
-              <CompactMetric
-                label="Pickup Risk"
-                value={formatNumber(stats.confirmedPickupNotVoted)}
-                tone="orange"
-              />
-            </div>
-
-            <p className="mt-3 hidden text-xs text-slate-400 sm:block">
-              Projection uses confirmed supporters plus 50% of leaning
-              supporters. This is an estimate, not a record of how anyone voted.
-            </p>
-          </div>
-
-          <div className="mt-4 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-            <DesktopStatCard
-              title="Confirmed Supporters"
-              value={formatNumber(stats.confirmed)}
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <SummaryCard label="Total" value={formatNumber(totals.total)} />
+            <SummaryCard
+              label="Confirmed"
+              value={formatNumber(totals.confirmed)}
+              detail={`${formatNumber(totals.leaning)} leaning`}
               tone="green"
-              subtitle={`${formatNumber(
-                stats.votesNeededFromConfirmed
-              )} more confirmed needed.`}
             />
-
-            <DesktopStatCard
-              title="Projected Votes"
-              value={formatNumber(stats.projectedVotes)}
+            <SummaryCard
+              label="Opponent"
+              value={formatNumber(totals.notSupporting)}
+              detail="Not Supporting"
+              tone="red"
+            />
+            <SummaryCard
+              label="Voted"
+              value={formatNumber(totals.voted)}
+              detail={`${formatNumber(totals.notVoted)} not voted`}
               tone="blue"
-              subtitle={`${formatNumber(
-                stats.votesNeededFromProjected
-              )} projected votes short.`}
             />
-
-            <DesktopStatCard
-              title="Confirmed Not Voted"
-              value={formatNumber(stats.confirmedNotVoted)}
-              tone="amber"
-              subtitle="Main turnout follow-up group."
-            />
-
-            <DesktopStatCard
-              title="Assignment Coverage"
-              value={`${stats.assignmentRate}%`}
+            <SummaryCard
+              label="Pickup"
+              value={formatNumber(totals.pickupNeeded)}
+              detail="Needed"
               tone="purple"
-              subtitle={`${formatNumber(stats.assigned)} assigned voters.`}
+            />
+            <SummaryCard
+              label="Unassigned"
+              value={formatNumber(totals.unassigned)}
+              detail="No campaigner"
+              tone={totals.unassigned > 0 ? "amber" : "slate"}
             />
           </div>
         </div>
       </section>
 
-      <section className="px-4 py-4 sm:px-6 sm:py-8">
+      <section className="px-4 py-5 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-4 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-            <ExportChip label="Export Voters" onClick={exportFullVoterReport} primary />
-            <ExportChip label="Zone CSV" onClick={exportZoneReport} />
-            <ExportChip label="Polling CSV" onClick={exportPollingReport} />
-            <ExportChip label="Campaigner CSV" onClick={exportCampaignerReport} />
-          </div>
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_1.5fr]">
+              <div>
+                <FieldLabel>Report Type</FieldLabel>
+                <SelectField
+                  value={reportType}
+                  onChange={(value) => setReportType(value as ReportType)}
+                >
+                  {reportTypes.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </SelectField>
 
-          <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-            <SectionHeader
-              title="Core Report Snapshot"
-              subtitle="Compact view of the most important numbers."
-            />
+                <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+                  {selectedReport.description}
+                </p>
+              </div>
 
-            <div className="mt-3 divide-y divide-slate-100 sm:hidden">
-              <CompactMetric
-                label="Total Voters"
-                value={formatNumber(stats.total)}
-                tone="slate"
-              />
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div>
+                  <FieldLabel>Search</FieldLabel>
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                    placeholder="Name, reg no., phone..."
+                  />
+                </div>
 
-              <CompactMetric
-                label="Vote Target"
-                value={formatNumber(stats.target)}
-                tone="blue"
-              />
+                <div>
+                  <FieldLabel>Support Status</FieldLabel>
+                  <SelectField value={supportFilter} onChange={setSupportFilter}>
+                    <option>All</option>
+                    {supportStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {getSupportLabel(status)}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
 
-              <CompactMetric
-                label="Confirmed Voted"
-                value={formatNumber(stats.confirmedVoted)}
-                tone="green"
-              />
+                <div>
+                  <FieldLabel>Zone</FieldLabel>
+                  <SelectField value={zoneFilter} onChange={setZoneFilter}>
+                    <option>All</option>
+                    {zoneOptions.map((zone) => (
+                      <option key={zone}>{zone}</option>
+                    ))}
+                  </SelectField>
+                </div>
 
-              <CompactMetric
-                label="Turnout Rate"
-                value={`${stats.turnoutRate}%`}
-                tone="green"
-              />
+                <div>
+                  <FieldLabel>Polling Area</FieldLabel>
+                  <SelectField value={pollingFilter} onChange={setPollingFilter}>
+                    <option>All</option>
+                    {pollingOptions.map((polling) => (
+                      <option key={polling} value={polling}>
+                        {pollingLabel(polling)}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
 
-              <CompactMetric
-                label="Unassigned"
-                value={formatNumber(stats.unassigned)}
-                tone={stats.unassigned > 0 ? "red" : "green"}
-              />
+                <div>
+                  <FieldLabel>Campaigner</FieldLabel>
+                  <SelectField
+                    value={campaignerFilter}
+                    onChange={setCampaignerFilter}
+                  >
+                    <option>All</option>
+                    {campaignerOptions.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.full_name}
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
 
-              <CompactMetric
-                label="Pickup Issues"
-                value={formatNumber(stats.pickupIssues)}
-                tone={stats.pickupIssues > 0 ? "red" : "green"}
-              />
+                <div>
+                  <FieldLabel>Assignment</FieldLabel>
+                  <SelectField
+                    value={assignmentFilter}
+                    onChange={setAssignmentFilter}
+                  >
+                    <option>All</option>
+                    <option>Assigned</option>
+                    <option>Unassigned</option>
+                  </SelectField>
+                </div>
+
+                <div>
+                  <FieldLabel>Voted Status</FieldLabel>
+                  <SelectField value={votedFilter} onChange={setVotedFilter}>
+                    <option>All</option>
+                    <option>Voted</option>
+                    <option>Not Voted</option>
+                  </SelectField>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-6 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-              <DesktopStatCard
-                title="Total Voters"
-                value={formatNumber(stats.total)}
-                subtitle="Full register loaded."
-                tone="slate"
-              />
+            <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 lg:flex-row lg:items-center lg:justify-between">
+              <label className="flex items-start gap-3 text-sm font-bold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={includeVoterList}
+                  onChange={(event) => setIncludeVoterList(event.target.checked)}
+                  className="mt-1 h-5 w-5"
+                />
+                Include voter list in PDF report.
+              </label>
 
-              <DesktopStatCard
-                title="Confirmed Voted"
-                value={formatNumber(stats.confirmedVoted)}
-                subtitle={`${stats.confirmedTurnoutRate}% of confirmed supporters.`}
-                tone="green"
-              />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <button
+                  onClick={clearFilters}
+                  className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                >
+                  Clear Filters
+                </button>
 
-              <DesktopStatCard
-                title="Pickup Not Voted"
-                value={formatNumber(stats.confirmedPickupNotVoted)}
-                subtitle="Confirmed supporters needing transport."
-                tone="orange"
-              />
+                <button
+                  onClick={exportCsv}
+                  disabled={reportVoters.length === 0}
+                  className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Export CSV
+                </button>
 
-              <DesktopStatCard
-                title="Pickup Issues"
-                value={formatNumber(stats.pickupIssues)}
-                subtitle="Needs immediate attention."
-                tone="red"
-              />
+                <button
+                  onClick={exportPdf}
+                  disabled={reportVoters.length === 0}
+                  className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                >
+                  Export PDF
+                </button>
+              </div>
             </div>
           </section>
 
-          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
-            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-              <SectionHeader
-                title="Support Status"
-                subtitle="Breakdown by current support status."
-              />
-
-              <div className="mt-4 space-y-3 sm:mt-6">
-                {supportReport.map((item) => (
-                  <ReportRow
-                    key={item.status}
-                    label={item.status}
-                    value={item.total}
-                    percent={item.percentage}
-                    tone={
-                      item.status === "Confirmed Supporter"
-                        ? "green"
-                        : item.status === "Leaning Supporter"
-                        ? "purple"
-                        : item.status === "Undecided"
-                        ? "amber"
-                        : item.status === "Not Supporting"
-                        ? "red"
-                        : "slate"
-                    }
-                  />
-                ))}
-
-                {supportReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
-                    No support status data available.
-                  </div>
-                )}
+          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Report Preview
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {activeFilterText()}
+                </p>
               </div>
-            </section>
 
-            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-              <SectionHeader
-                title="Pickup Status"
-                subtitle="Transportation and pickup breakdown."
-              />
-
-              <div className="mt-4 space-y-3 sm:mt-6">
-                {pickupReport.map((item) => (
-                  <ReportRow
-                    key={item.status}
-                    label={item.status}
-                    value={item.total}
-                    percent={item.percentage}
-                    tone={
-                      item.status === "Issue"
-                        ? "red"
-                        : item.status === "Completed"
-                        ? "green"
-                        : item.status === "No Pickup Needed"
-                        ? "slate"
-                        : "amber"
-                    }
-                  />
-                ))}
-
-                {pickupReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
-                    No pickup status data available.
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-
-          <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
-            <SectionHeader
-              title="Zone Report"
-              subtitle="Compact zone performance on mobile, full table on desktop."
-              action={
-                <button
-                  onClick={exportZoneReport}
-                  className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
-                >
-                  Export Zone CSV
-                </button>
-              }
-            />
-
-            <div className="mt-4 grid gap-3 lg:hidden">
-              {zoneReport.map((item) => (
-                <div
-                  key={item.zone}
-                  className="min-w-0 rounded-2xl border border-slate-200 p-3"
-                >
-                  <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="break-words text-base font-black text-slate-900">
-                        {item.zone}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Total: {formatNumber(item.total)}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${
-                        item.pickupIssues > 0
-                          ? "bg-red-100 text-red-800"
-                          : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {item.pickupIssues > 0 ? `${item.pickupIssues} issue` : "OK"}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-400">
-                        Conf.
-                      </p>
-                      <p className="text-lg font-black text-green-700">
-                        {formatNumber(item.confirmed)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-400">
-                        Proj.
-                      </p>
-                      <p className="text-lg font-black text-blue-700">
-                        {formatNumber(item.projected)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-400">
-                        Rem.
-                      </p>
-                      <p className="text-lg font-black text-amber-700">
-                        {formatNumber(item.confirmedRemaining)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-[11px] font-semibold text-slate-400">
-                        Unasn.
-                      </p>
-                      <p className="text-lg font-black text-red-700">
-                        {formatNumber(item.unassigned)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {zoneReport.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-                  No zone data available.
-                </div>
+              {loadingReport && (
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                  Loading...
+                </span>
               )}
             </div>
 
-            <div className="mt-6 hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1050px] text-left text-sm">
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
                 <thead>
-                  <tr className="border-b bg-slate-50 text-slate-600">
-                    <th className="p-3">Zone</th>
-                    <th className="p-3">Total</th>
-                    <th className="p-3">Confirmed</th>
-                    <th className="p-3">Leaning</th>
-                    <th className="p-3">Projected</th>
-                    <th className="p-3">Confirmed Voted</th>
-                    <th className="p-3">Remaining</th>
-                    <th className="p-3">Pickup</th>
-                    <th className="p-3">Issues</th>
-                    <th className="p-3">Unassigned</th>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="py-3 pr-3 font-black">Group</th>
+                    <th className="px-3 py-3 font-black">Total</th>
+                    <th className="px-3 py-3 font-black">Confirmed</th>
+                    <th className="px-3 py-3 font-black">Leaning</th>
+                    <th className="px-3 py-3 font-black">Not Supporting</th>
+                    <th className="px-3 py-3 font-black">Undecided/Unknown</th>
+                    <th className="px-3 py-3 font-black">Voted</th>
+                    <th className="px-3 py-3 font-black">Not Voted</th>
+                    <th className="px-3 py-3 font-black">Pickup</th>
                   </tr>
                 </thead>
 
-                <tbody>
-                  {zoneReport.map((item) => (
-                    <tr key={item.zone} className="border-b align-top">
-                      <td className="p-3 font-black text-slate-900">
-                        {item.zone}
+                <tbody className="divide-y divide-slate-100">
+                  {summaryRows.map((row) => (
+                    <tr key={row.label} className="align-top">
+                      <td className="py-3 pr-3 font-black text-slate-950">
+                        {row.label}
                       </td>
-                      <td className="p-3">{formatNumber(item.total)}</td>
-                      <td className="p-3 font-bold text-green-700">
-                        {formatNumber(item.confirmed)}
+                      <td className="px-3 py-3 font-bold text-slate-700">
+                        {formatNumber(row.total)}
                       </td>
-                      <td className="p-3 font-bold text-purple-700">
-                        {formatNumber(item.leaning)}
+                      <td className="px-3 py-3 font-bold text-green-700">
+                        {formatNumber(row.confirmed)}
                       </td>
-                      <td className="p-3 font-bold text-blue-700">
-                        {formatNumber(item.projected)}
+                      <td className="px-3 py-3 font-bold text-purple-700">
+                        {formatNumber(row.leaning)}
                       </td>
-                      <td className="p-3">{formatNumber(item.confirmedVoted)}</td>
-                      <td className="p-3 font-bold text-amber-700">
-                        {formatNumber(item.confirmedRemaining)}
+                      <td className="px-3 py-3 font-bold text-red-700">
+                        {formatNumber(row.notSupporting)}
                       </td>
-                      <td className="p-3 font-bold text-orange-700">
-                        {formatNumber(item.pickupNeeded)}
+                      <td className="px-3 py-3 font-bold text-amber-700">
+                        {formatNumber(row.undecidedUnknown)}
                       </td>
-                      <td className="p-3 font-bold text-red-700">
-                        {formatNumber(item.pickupIssues)}
+                      <td className="px-3 py-3 font-bold text-blue-700">
+                        {formatNumber(row.voted)}
                       </td>
-                      <td className="p-3 font-bold text-red-700">
-                        {formatNumber(item.unassigned)}
+                      <td className="px-3 py-3 font-bold text-slate-700">
+                        {formatNumber(row.notVoted)}
+                      </td>
+                      <td className="px-3 py-3 font-bold text-purple-700">
+                        {formatNumber(row.pickupNeeded)}
                       </td>
                     </tr>
                   ))}
 
-                  {zoneReport.length === 0 && (
+                  {summaryRows.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={10}
-                        className="p-8 text-center text-slate-500"
-                      >
-                        No zone data available.
+                      <td colSpan={9} className="p-10 text-center text-slate-500">
+                        No records match this report.
                       </td>
                     </tr>
                   )}
@@ -1469,227 +1347,143 @@ export default function ReportsPage() {
             </div>
           </section>
 
-          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
-            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-              <SectionHeader
-                title="Polling Areas"
-                subtitle="Performance by polling area."
-                action={
-                  <button
-                    onClick={exportPollingReport}
-                    className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
-                  >
-                    Export Polling CSV
-                  </button>
-                }
-              />
-
-              <div className="mt-4 space-y-3 sm:mt-6">
-                {pollingReport.map((item) => {
-                  const turnout = percentage(item.voted, item.total);
-
-                  return (
-                    <div
-                      key={item.pollingArea}
-                      className="rounded-2xl border border-slate-200 p-3 sm:p-4"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-black text-slate-900">
-                            Polling {item.pollingArea}
-                          </p>
-                          <p className="text-xs text-slate-500 sm:text-sm">
-                            {formatNumber(item.confirmed)} confirmed ·{" "}
-                            {formatNumber(item.confirmedRemaining)} remaining
-                          </p>
-                        </div>
-
-                        <p className="shrink-0 text-xl font-black text-green-700 sm:text-2xl">
-                          {turnout}%
-                        </p>
-                      </div>
-
-                      <div className="mt-2 sm:mt-3">
-                        <ProgressBar value={turnout} tone="green" />
-                      </div>
-
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs sm:mt-3">
-                        <div className="rounded-xl bg-blue-50 p-2 text-blue-800">
-                          Proj.{" "}
-                          <span className="font-black">
-                            {formatNumber(item.projected)}
-                          </span>
-                        </div>
-
-                        <div className="rounded-xl bg-orange-50 p-2 text-orange-800">
-                          Pick.{" "}
-                          <span className="font-black">
-                            {formatNumber(item.pickupNeeded)}
-                          </span>
-                        </div>
-
-                        <div className="rounded-xl bg-red-50 p-2 text-red-800">
-                          Issue{" "}
-                          <span className="font-black">
-                            {formatNumber(item.pickupIssues)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {pollingReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
-                    No polling area data available.
-                  </div>
-                )}
+          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Voter List Preview
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Showing first {formatNumber(Math.min(reportVoters.length, 100))} of{" "}
+                  {formatNumber(reportVoters.length)} voter(s).
+                </p>
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-              <SectionHeader
-                title="Campaigners"
-                subtitle="Campaigner contribution by assigned list."
-                action={
-                  <button
-                    onClick={exportCampaignerReport}
-                    className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
-                  >
-                    Export Campaigner CSV
-                  </button>
-                }
-              />
-
-              <div className="mt-4 space-y-3 sm:mt-6">
-                {campaignerReport.map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl border border-slate-200 p-3 sm:p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-black text-slate-900">
-                          {index + 1}. {item.name}
-                        </p>
-
-                        <p className="text-xs text-slate-500 sm:text-sm">
-                          {item.zone || "No zone"} ·{" "}
-                          {formatNumber(item.assigned)} assigned ·{" "}
-                          {formatNumber(item.pickupNeeded)} pickup
-                        </p>
-                      </div>
-
-                      <div className="shrink-0 rounded-2xl bg-blue-50 px-3 py-2 text-right">
-                        <p className="text-xl font-black text-blue-800">
-                          {formatNumber(item.confirmed)}
-                        </p>
-                        <p className="text-[10px] font-bold uppercase text-blue-700">
-                          Conf.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {campaignerReport.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
-                    No campaigner report data available.
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:mt-6 xl:grid-cols-2 xl:gap-6">
-            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-              <SectionHeader
-                title="Confirmed Not Voted"
-                subtitle="Top records requiring turnout follow-up."
-              />
-
-              <div className="mt-4 space-y-3 sm:mt-6">
-                {confirmedNotVotedList.map((voter) => (
-                  <div
-                    key={voter.id}
-                    className="rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4"
-                  >
+            <div className="mt-4 grid gap-3 lg:hidden">
+              {reportVoters.slice(0, 100).map((voter) => (
+                <article
+                  key={voter.id}
+                  className="rounded-3xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                         {getRegNo(voter)}
                       </p>
-
-                      <p className="mt-1 truncate text-base font-black text-slate-900 sm:text-lg">
+                      <h3 className="mt-1 break-words text-lg font-black text-slate-950">
                         {getDisplayName(voter)}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-                        Zone: {voter.zone || "No zone"} · Polling:{" "}
-                        {voter.polling_area || "No polling area"}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-                        Campaigner:{" "}
-                        {voter.campaigner_id
-                          ? campaignerNameMap.get(voter.campaigner_id) ||
-                            "Assigned"
-                          : "Unassigned"}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {voter.zone || "No zone"} ·{" "}
+                        {getPollingArea(voter) || "No polling"}
                       </p>
                     </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                        voter.voted
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {voter.voted ? "Voted" : "Not Voted"}
+                    </span>
                   </div>
-                ))}
 
-                {confirmedNotVotedList.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
-                    No confirmed supporters pending turnout.
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-black ${supportPillClass(
+                        voter.support_status
+                      )}`}
+                    >
+                      {getSupportLabel(voter.support_status)}
+                    </span>
+
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                      {voter.campaigners?.full_name || "Unassigned"}
+                    </span>
                   </div>
-                )}
-              </div>
-            </section>
+                </article>
+              ))}
 
-            <section className="rounded-3xl bg-white p-4 shadow sm:p-6">
-              <SectionHeader
-                title="Pickup Risk"
-                subtitle="Confirmed supporters needing pickup and not yet voted."
-              />
+              {reportVoters.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  No voters match this report.
+                </div>
+              )}
+            </div>
 
-              <div className="mt-4 space-y-3 sm:mt-6">
-                {pickupRiskList.map((voter) => (
-                  <div
-                    key={voter.id}
-                    className="rounded-2xl border border-orange-200 bg-orange-50 p-3 sm:p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">
-                          {getRegNo(voter)}
-                        </p>
+            <div className="mt-4 hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1050px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="py-3 pr-3 font-black">Reg No.</th>
+                    <th className="px-3 py-3 font-black">Name</th>
+                    <th className="px-3 py-3 font-black">Zone</th>
+                    <th className="px-3 py-3 font-black">Polling</th>
+                    <th className="px-3 py-3 font-black">Support</th>
+                    <th className="px-3 py-3 font-black">Campaigner</th>
+                    <th className="px-3 py-3 font-black">Voted</th>
+                    <th className="px-3 py-3 font-black">Pickup</th>
+                  </tr>
+                </thead>
 
-                        <p className="mt-1 truncate text-base font-black text-slate-900 sm:text-lg">
-                          {getDisplayName(voter)}
-                        </p>
+                <tbody className="divide-y divide-slate-100">
+                  {reportVoters.slice(0, 100).map((voter) => (
+                    <tr key={voter.id} className="align-top">
+                      <td className="py-3 pr-3 font-bold text-slate-700">
+                        {getRegNo(voter)}
+                      </td>
+                      <td className="px-3 py-3 font-black text-slate-950">
+                        {getDisplayName(voter)}
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {voter.zone || "No Zone"}
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {getPollingArea(voter) || "No Polling"}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${supportPillClass(
+                            voter.support_status
+                          )}`}
+                        >
+                          {getSupportLabel(voter.support_status)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {voter.campaigners?.full_name || "Unassigned"}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            voter.voted
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {voter.voted ? "Voted" : "Not Voted"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {voter.pickup_needed ? "Needed" : "Not Needed"}
+                      </td>
+                    </tr>
+                  ))}
 
-                        <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-                          Zone: {voter.zone || "No zone"} · Polling:{" "}
-                          {voter.polling_area || "No polling area"}
-                        </p>
-                      </div>
-
-                      <span className="w-fit shrink-0 rounded-full bg-orange-200 px-2.5 py-1 text-[11px] font-black text-orange-900">
-                        {getPickupStatus(voter)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-
-                {pickupRiskList.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:p-8">
-                    No pickup risks at this time.
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
+                  {reportVoters.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="p-10 text-center text-slate-500">
+                        No voters match this report.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </section>
     </main>
