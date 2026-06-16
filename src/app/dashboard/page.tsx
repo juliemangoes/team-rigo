@@ -122,7 +122,11 @@ function getRegNo(voter: IssueVoter) {
   return voter.voter_reg_no || voter.voter_number || "No reg no.";
 }
 
-function getVictoryStatus(projectedVotes: number, confirmed: number, target: number) {
+function getVictoryStatus(
+  projectedVotes: number,
+  confirmed: number,
+  target: number
+) {
   if (!target || target <= 0) {
     return {
       label: "Set Target",
@@ -189,6 +193,16 @@ function statusBadgeClass(tone: string) {
   if (tone === "red") return "bg-red-100 text-red-800";
 
   return "bg-slate-100 text-slate-800";
+}
+
+function progressColorClass(tone: string) {
+  if (tone === "green") return "bg-green-400";
+  if (tone === "blue") return "bg-blue-400";
+  if (tone === "amber") return "bg-amber-400";
+  if (tone === "orange") return "bg-orange-400";
+  if (tone === "red") return "bg-red-400";
+
+  return "bg-slate-400";
 }
 
 export default function DashboardPage() {
@@ -382,30 +396,18 @@ export default function DashboardPage() {
       (voter) => !voter.support_status || voter.support_status === "Unknown"
     ).length;
 
-    const notSupporting = voters.filter(
-      (voter) => voter.support_status === "Not Supporting"
-    ).length;
-
-    const doNotContact = voters.filter(
-      (voter) => voter.support_status === "Do Not Contact"
-    ).length;
-
     const pickupNeeded = voters.filter((voter) => voter.pickup_needed).length;
 
     const pickupIssues = voters.filter(
       (voter) => voter.pickup_status === "Issue"
     ).length;
 
-    const voted = voters.filter((voter) => voter.voted).length;
-
     const confirmedVoted = voters.filter(
-      (voter) =>
-        voter.voted && voter.support_status === "Confirmed Supporter"
+      (voter) => voter.voted && voter.support_status === "Confirmed Supporter"
     ).length;
 
     const confirmedNotVoted = voters.filter(
-      (voter) =>
-        !voter.voted && voter.support_status === "Confirmed Supporter"
+      (voter) => !voter.voted && voter.support_status === "Confirmed Supporter"
     ).length;
 
     const confirmedPickupNotVoted = voters.filter(
@@ -432,11 +434,8 @@ export default function DashboardPage() {
       leaning,
       undecided,
       unknown,
-      notSupporting,
-      doNotContact,
       pickupNeeded,
       pickupIssues,
-      voted,
       confirmedVoted,
       confirmedNotVoted,
       confirmedPickupNotVoted,
@@ -452,7 +451,6 @@ export default function DashboardPage() {
       confirmedProgress: percentage(confirmed, target),
       confirmedTurnoutRate: percentage(confirmedVoted, confirmed),
       assignmentRate: percentage(assigned, total),
-      pickupRate: percentage(pickupNeeded, total),
     };
   }, [voters, settings]);
 
@@ -627,14 +625,14 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 p-6">
+      <main className="min-h-screen bg-slate-950 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl border border-white/10 bg-white/10 p-10 text-center shadow-xl">
+          <div className="rounded-3xl border border-white/10 bg-white/10 p-8 text-center shadow-xl sm:p-10">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">
               Team Rigo
             </p>
 
-            <h1 className="mt-4 text-3xl font-bold text-white">
+            <h1 className="mt-4 text-2xl font-bold text-white sm:text-3xl">
               Loading path to victory...
             </h1>
           </div>
@@ -645,8 +643,8 @@ export default function DashboardPage() {
 
   if (profile?.role !== "Campaign Manager") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
-        <div className="w-full max-w-xl rounded-2xl bg-white p-8 text-center shadow">
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
+        <div className="w-full max-w-xl rounded-2xl bg-white p-6 text-center shadow sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
             Team Rigo
           </p>
@@ -665,31 +663,31 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-100">
-      <section className="bg-slate-950 px-6 py-8 text-white">
+      <section className="bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-300">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
                 Team Rigo
               </p>
 
-              <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
+              <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
                 Path to Victory Dashboard
               </h1>
 
-              <p className="mt-3 max-w-3xl text-slate-300">
+              <p className="mt-3 max-w-3xl text-sm text-slate-300 sm:text-base">
                 Track whether the campaign is on pace to reach its vote target
                 based on confirmed supporters, leaning supporters, turnout, and
                 operational risks.
               </p>
 
-              <p className="mt-3 text-sm text-slate-400">
+              <p className="mt-3 text-xs text-slate-400 sm:text-sm">
                 {settings?.election_name || "Team Rigo Campaign"} · Logged in
                 as {profile?.full_name}
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="grid gap-3 sm:flex sm:flex-wrap">
               <button
                 onClick={loadDashboard}
                 disabled={refreshing}
@@ -700,14 +698,14 @@ export default function DashboardPage() {
 
               <Link
                 href="/campaign-setup"
-                className="rounded-2xl border border-white/20 px-5 py-3 text-sm font-bold text-white hover:bg-white/10"
+                className="rounded-2xl border border-white/20 px-5 py-3 text-center text-sm font-bold text-white hover:bg-white/10"
               >
                 Campaign Setup
               </Link>
 
               <Link
                 href="/voters"
-                className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
+                className="rounded-2xl bg-blue-600 px-5 py-3 text-center text-sm font-bold text-white hover:bg-blue-700"
               >
                 Manage Voters
               </Link>
@@ -727,13 +725,13 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="mt-8 grid gap-4 xl:grid-cols-4">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-xl xl:col-span-2">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6 lg:col-span-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm text-slate-300">Win Status</p>
 
-                  <h2 className="mt-3 text-5xl font-black">
+                  <h2 className="mt-3 text-4xl font-black sm:text-5xl">
                     {stats.victoryStatus.label}
                   </h2>
 
@@ -743,7 +741,7 @@ export default function DashboardPage() {
                 </div>
 
                 <span
-                  className={`rounded-full px-4 py-2 text-sm font-black ${statusBadgeClass(
+                  className={`w-fit rounded-full px-4 py-2 text-sm font-black ${statusBadgeClass(
                     stats.victoryStatus.tone
                   )}`}
                 >
@@ -754,8 +752,10 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-6">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-300">Projected Vote Strength</span>
+                <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-slate-300">
+                    Projected Vote Strength
+                  </span>
                   <span className="font-bold text-white">
                     {formatNumber(stats.projectedVotes)} /{" "}
                     {formatNumber(stats.target)}
@@ -764,7 +764,9 @@ export default function DashboardPage() {
 
                 <div className="mt-3 h-4 rounded-full bg-white/10">
                   <div
-                    className="h-4 rounded-full bg-blue-400"
+                    className={`h-4 rounded-full ${progressColorClass(
+                      stats.victoryStatus.tone
+                    )}`}
                     style={{
                       width: `${Math.min(stats.targetProgress, 100)}%`,
                     }}
@@ -779,9 +781,9 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-6 shadow-xl">
+            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 shadow-xl sm:p-6">
               <p className="text-sm text-green-200">Confirmed Supporters</p>
-              <h2 className="mt-3 text-5xl font-black">
+              <h2 className="mt-3 text-4xl font-black sm:text-5xl">
                 {formatNumber(stats.confirmed)}
               </h2>
               <p className="mt-3 text-sm text-green-100">
@@ -793,9 +795,9 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-blue-400/30 bg-blue-500/10 p-6 shadow-xl">
+            <div className="rounded-3xl border border-blue-400/30 bg-blue-500/10 p-5 shadow-xl sm:p-6">
               <p className="text-sm text-blue-200">Projected Votes</p>
-              <h2 className="mt-3 text-5xl font-black">
+              <h2 className="mt-3 text-4xl font-black sm:text-5xl">
                 {formatNumber(stats.projectedVotes)}
               </h2>
               <p className="mt-3 text-sm text-blue-100">
@@ -808,10 +810,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-xl">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6">
               <p className="text-sm text-slate-300">Vote Target to Win</p>
-              <h2 className="mt-3 text-4xl font-black">
+              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
                 {formatNumber(stats.target)}
               </h2>
               <p className="mt-3 text-sm text-slate-400">
@@ -819,9 +821,9 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-purple-400/30 bg-purple-500/10 p-6 shadow-xl">
+            <div className="rounded-3xl border border-purple-400/30 bg-purple-500/10 p-5 shadow-xl sm:p-6">
               <p className="text-sm text-purple-200">Leaning Supporters</p>
-              <h2 className="mt-3 text-4xl font-black">
+              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
                 {formatNumber(stats.leaning)}
               </h2>
               <p className="mt-3 text-sm text-purple-100">
@@ -829,11 +831,11 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-6 shadow-xl">
+            <div className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-5 shadow-xl sm:p-6">
               <p className="text-sm text-amber-200">
                 Confirmed Not Yet Voted
               </p>
-              <h2 className="mt-3 text-4xl font-black">
+              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
                 {formatNumber(stats.confirmedNotVoted)}
               </h2>
               <p className="mt-3 text-sm text-amber-100">
@@ -841,9 +843,9 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-6 shadow-xl">
+            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 shadow-xl sm:p-6">
               <p className="text-sm text-green-200">Confirmed Voted</p>
-              <h2 className="mt-3 text-4xl font-black">
+              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
                 {formatNumber(stats.confirmedVoted)}
               </h2>
               <p className="mt-3 text-sm text-green-100">
@@ -854,11 +856,11 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="px-6 py-8">
+      <section className="px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-6 xl:grid-cols-3">
-            <section className="rounded-3xl bg-white p-6 shadow xl:col-span-2">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <section className="rounded-3xl bg-white p-5 shadow sm:p-6 xl:col-span-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">
                     Victory Risk Indicators
@@ -870,13 +872,13 @@ export default function DashboardPage() {
 
                 <Link
                   href="/reports"
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50"
                 >
                   View Reports
                 </Link>
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-2xl bg-red-50 p-5">
                   <p className="text-sm text-red-700">Unassigned Voters</p>
                   <h3 className="mt-2 text-3xl font-black text-red-800">
@@ -942,7 +944,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-6 shadow">
+            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
               <h2 className="text-2xl font-black text-slate-900">
                 Quick Actions
               </h2>
@@ -990,7 +992,7 @@ export default function DashboardPage() {
             </section>
           </div>
 
-          <section className="mt-6 rounded-3xl bg-white p-6 shadow">
+          <section className="mt-6 rounded-3xl bg-white p-5 shadow sm:p-6">
             <h2 className="text-2xl font-black text-slate-900">
               Zone Battle Map
             </h2>
@@ -1000,7 +1002,99 @@ export default function DashboardPage() {
               pickup risks exist.
             </p>
 
-            <div className="mt-6 overflow-x-auto">
+            <div className="mt-6 grid gap-4 md:hidden">
+              {zoneSummary.map((item) => (
+                <div
+                  key={item.zone}
+                  className="rounded-2xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">
+                        {item.zone}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        Total voters: {formatNumber(item.total)}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-black ${
+                        item.pickupIssues > 0
+                          ? "bg-red-100 text-red-800"
+                          : "bg-green-100 text-green-800"
+                      }`}
+                    >
+                      {item.pickupIssues > 0
+                        ? `${item.pickupIssues} issue(s)`
+                        : "No issues"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-green-50 p-3">
+                      <p className="text-xs font-semibold text-green-700">
+                        Confirmed
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-green-800">
+                        {formatNumber(item.confirmed)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-purple-50 p-3">
+                      <p className="text-xs font-semibold text-purple-700">
+                        Leaning
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-purple-800">
+                        {formatNumber(item.leaning)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-blue-50 p-3">
+                      <p className="text-xs font-semibold text-blue-700">
+                        Projected
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-blue-800">
+                        {formatNumber(item.projected)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-amber-50 p-3">
+                      <p className="text-xs font-semibold text-amber-700">
+                        Remaining
+                      </p>
+                      <p className="mt-1 text-2xl font-black text-amber-800">
+                        {formatNumber(item.confirmedRemaining)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 text-sm text-slate-700">
+                    <div className="flex justify-between">
+                      <span>Confirmed Voted</span>
+                      <span className="font-bold">
+                        {formatNumber(item.confirmedVoted)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Pickup Needed</span>
+                      <span className="font-bold text-orange-700">
+                        {formatNumber(item.pickupNeeded)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {zoneSummary.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                  No zone data available.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 hidden overflow-x-auto md:block">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead>
                   <tr className="border-b bg-slate-50 text-slate-600">
@@ -1043,11 +1137,11 @@ export default function DashboardPage() {
                         {formatNumber(item.confirmedVoted)}
                       </td>
 
-                      <td className="p-3 text-amber-700 font-bold">
+                      <td className="p-3 font-bold text-amber-700">
                         {formatNumber(item.confirmedRemaining)}
                       </td>
 
-                      <td className="p-3 text-orange-700 font-bold">
+                      <td className="p-3 font-bold text-orange-700">
                         {formatNumber(item.pickupNeeded)}
                       </td>
 
@@ -1081,7 +1175,7 @@ export default function DashboardPage() {
           </section>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-6 shadow">
+            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
               <h2 className="text-2xl font-black text-slate-900">
                 Polling Area Watch
               </h2>
@@ -1134,7 +1228,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-6 shadow">
+            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
               <h2 className="text-2xl font-black text-slate-900">
                 Campaigner Contribution
               </h2>
@@ -1185,8 +1279,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-6 shadow">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">
                     Pickup Issues
@@ -1199,7 +1293,7 @@ export default function DashboardPage() {
 
                 <Link
                   href="/campaigners"
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50"
                 >
                   Open Field View
                 </Link>
@@ -1211,7 +1305,7 @@ export default function DashboardPage() {
                     key={voter.id}
                     className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
                   >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
                           {getRegNo(voter)}
@@ -1233,7 +1327,7 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      <span className="rounded-full bg-amber-200 px-3 py-1 text-xs font-black text-amber-900">
+                      <span className="w-fit rounded-full bg-amber-200 px-3 py-1 text-xs font-black text-amber-900">
                         Issue
                       </span>
                     </div>
@@ -1248,7 +1342,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white p-6 shadow">
+            <section className="rounded-3xl bg-white p-5 shadow sm:p-6">
               <h2 className="text-2xl font-black text-slate-900">
                 Team Structure
               </h2>
@@ -1257,7 +1351,7 @@ export default function DashboardPage() {
                 Active team members by role.
               </p>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl bg-slate-50 p-5">
                   <p className="text-sm text-slate-500">Total Team</p>
                   <h3 className="mt-2 text-3xl font-black text-slate-900">
