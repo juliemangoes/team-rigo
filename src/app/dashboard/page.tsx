@@ -100,8 +100,13 @@ function percentage(value: number, total: number) {
   return Math.round((value / total) * 100);
 }
 
+function clampPercentage(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Math.max(value, 0), 100);
+}
+
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat("en-US").format(value || 0);
 }
 
 function getDisplayName(voter: IssueVoter) {
@@ -185,7 +190,7 @@ function getVictoryStatus(
   };
 }
 
-function statusBadgeClass(tone: string) {
+function badgeClass(tone: string) {
   if (tone === "green") return "bg-green-100 text-green-800";
   if (tone === "blue") return "bg-blue-100 text-blue-800";
   if (tone === "amber") return "bg-amber-100 text-amber-800";
@@ -195,7 +200,7 @@ function statusBadgeClass(tone: string) {
   return "bg-slate-100 text-slate-800";
 }
 
-function progressColorClass(tone: string) {
+function progressClass(tone: string) {
   if (tone === "green") return "bg-green-400";
   if (tone === "blue") return "bg-blue-400";
   if (tone === "amber") return "bg-amber-400";
@@ -203,6 +208,119 @@ function progressColorClass(tone: string) {
   if (tone === "red") return "bg-red-400";
 
   return "bg-slate-400";
+}
+
+function dangerText(value: number) {
+  if (value > 0) return "text-red-700";
+  return "text-green-700";
+}
+
+function ProgressBar({
+  value,
+  tone = "blue",
+}: {
+  value: number;
+  tone?: string;
+}) {
+  return (
+    <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+      <div
+        className={`h-3 rounded-full ${progressClass(tone)}`}
+        style={{ width: `${clampPercentage(value)}%` }}
+      />
+    </div>
+  );
+}
+
+function HeroMetric({
+  title,
+  value,
+  subtitle,
+  tone,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  tone: string;
+}) {
+  const toneClasses =
+    tone === "green"
+      ? "border-green-400/30 bg-green-500/10 text-green-100"
+      : tone === "blue"
+      ? "border-blue-400/30 bg-blue-500/10 text-blue-100"
+      : tone === "amber"
+      ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
+      : tone === "purple"
+      ? "border-purple-400/30 bg-purple-500/10 text-purple-100"
+      : "border-white/10 bg-white/10 text-slate-100";
+
+  return (
+    <div
+      className={`min-w-0 rounded-3xl border p-5 shadow-xl sm:p-6 ${toneClasses}`}
+    >
+      <p className="text-sm opacity-90">{title}</p>
+      <h2 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
+        {value}
+      </h2>
+      <p className="mt-3 text-sm opacity-90">{subtitle}</p>
+    </div>
+  );
+}
+
+function RiskCard({
+  title,
+  value,
+  subtitle,
+  tone,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  tone: "red" | "amber" | "orange" | "slate" | "purple" | "blue" | "green";
+}) {
+  const colors = {
+    red: "bg-red-50 text-red-800",
+    amber: "bg-amber-50 text-amber-800",
+    orange: "bg-orange-50 text-orange-800",
+    slate: "bg-slate-50 text-slate-900",
+    purple: "bg-purple-50 text-purple-800",
+    blue: "bg-blue-50 text-blue-800",
+    green: "bg-green-50 text-green-800",
+  };
+
+  return (
+    <div className={`min-w-0 rounded-2xl p-5 ${colors[tone]}`}>
+      <p className="text-sm opacity-90">{title}</p>
+      <h3 className="mt-2 break-words text-3xl font-black">{value}</h3>
+      <p className="mt-2 text-sm opacity-90">{subtitle}</p>
+    </div>
+  );
+}
+
+function SmallCountCard({
+  title,
+  value,
+  tone,
+}: {
+  title: string;
+  value: number;
+  tone: "slate" | "blue" | "green" | "amber" | "red" | "purple";
+}) {
+  const colors = {
+    slate: "bg-slate-50 text-slate-900",
+    blue: "bg-blue-50 text-blue-800",
+    green: "bg-green-50 text-green-800",
+    amber: "bg-amber-50 text-amber-800",
+    red: "bg-red-50 text-red-800",
+    purple: "bg-purple-50 text-purple-800",
+  };
+
+  return (
+    <div className={`rounded-2xl p-5 ${colors[tone]}`}>
+      <p className="text-sm opacity-90">{title}</p>
+      <h3 className="mt-2 text-3xl font-black">{formatNumber(value)}</h3>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -396,8 +514,6 @@ export default function DashboardPage() {
       (voter) => !voter.support_status || voter.support_status === "Unknown"
     ).length;
 
-    const pickupNeeded = voters.filter((voter) => voter.pickup_needed).length;
-
     const pickupIssues = voters.filter(
       (voter) => voter.pickup_status === "Issue"
     ).length;
@@ -434,7 +550,6 @@ export default function DashboardPage() {
       leaning,
       undecided,
       unknown,
-      pickupNeeded,
       pickupIssues,
       confirmedVoted,
       confirmedNotVoted,
@@ -662,52 +777,46 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100">
+    <main className="min-h-screen overflow-x-hidden bg-slate-100">
       <section className="bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-            <div>
+          <div className="flex min-w-0 flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300 sm:text-sm sm:tracking-[0.3em]">
                 Team Rigo
               </p>
 
-              <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
-                Path to Victory Dashboard
+              <h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl md:text-5xl">
+                Dashboard
               </h1>
 
-              <p className="mt-3 max-w-3xl text-sm text-slate-300 sm:text-base">
-                Track whether the campaign is on pace to reach its vote target
-                based on confirmed supporters, leaning supporters, turnout, and
-                operational risks.
-              </p>
-
-              <p className="mt-3 text-xs text-slate-400 sm:text-sm">
+              <p className="mt-3 break-words text-xs text-slate-400 sm:text-sm">
                 {settings?.election_name || "Team Rigo Campaign"} · Logged in
                 as {profile?.full_name}
               </p>
             </div>
 
-            <div className="grid gap-3 sm:flex sm:flex-wrap">
+            <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-3 xl:flex xl:flex-wrap">
               <button
                 onClick={loadDashboard}
                 disabled={refreshing}
                 className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {refreshing ? "Refreshing..." : "Refresh Dashboard"}
+                {refreshing ? "Refreshing..." : "Refresh"}
               </button>
 
               <Link
                 href="/campaign-setup"
                 className="rounded-2xl border border-white/20 px-5 py-3 text-center text-sm font-bold text-white hover:bg-white/10"
               >
-                Campaign Setup
+                Setup
               </Link>
 
               <Link
                 href="/voters"
                 className="rounded-2xl bg-blue-600 px-5 py-3 text-center text-sm font-bold text-white hover:bg-blue-700"
               >
-                Manage Voters
+                Voters
               </Link>
             </div>
           </div>
@@ -726,12 +835,12 @@ export default function DashboardPage() {
           )}
 
           <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6 lg:col-span-2">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+            <div className="min-w-0 rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6 lg:col-span-2">
+              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <p className="text-sm text-slate-300">Win Status</p>
 
-                  <h2 className="mt-3 text-4xl font-black sm:text-5xl">
+                  <h2 className="mt-3 break-words text-4xl font-black sm:text-5xl">
                     {stats.victoryStatus.label}
                   </h2>
 
@@ -741,13 +850,14 @@ export default function DashboardPage() {
                 </div>
 
                 <span
-                  className={`w-fit rounded-full px-4 py-2 text-sm font-black ${statusBadgeClass(
+                  className={`w-fit shrink-0 rounded-full px-4 py-2 text-sm font-black ${badgeClass(
                     stats.victoryStatus.tone
                   )}`}
                 >
                   {stats.projectedCushion >= 0
-                    ? `+${formatNumber(stats.projectedCushion)} projected`
-                    : `${formatNumber(stats.projectedCushion)} projected`}
+                    ? `+${formatNumber(stats.projectedCushion)}`
+                    : `${formatNumber(stats.projectedCushion)}`}{" "}
+                  projected
                 </span>
               </div>
 
@@ -762,13 +872,13 @@ export default function DashboardPage() {
                   </span>
                 </div>
 
-                <div className="mt-3 h-4 rounded-full bg-white/10">
+                <div className="mt-3 h-4 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className={`h-4 rounded-full ${progressColorClass(
+                    className={`h-4 rounded-full ${progressClass(
                       stats.victoryStatus.tone
                     )}`}
                     style={{
-                      width: `${Math.min(stats.targetProgress, 100)}%`,
+                      width: `${clampPercentage(stats.targetProgress)}%`,
                     }}
                   />
                 </div>
@@ -781,77 +891,61 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-green-200">Confirmed Supporters</p>
-              <h2 className="mt-3 text-4xl font-black sm:text-5xl">
-                {formatNumber(stats.confirmed)}
-              </h2>
-              <p className="mt-3 text-sm text-green-100">
-                {stats.confirmedCushion >= 0
+            <HeroMetric
+              title="Confirmed Supporters"
+              value={formatNumber(stats.confirmed)}
+              tone="green"
+              subtitle={
+                stats.confirmedCushion >= 0
                   ? `${formatNumber(stats.confirmedCushion)} above target`
                   : `${formatNumber(
                       stats.votesNeededFromConfirmed
-                    )} more confirmed needed`}
-              </p>
-            </div>
+                    )} more confirmed needed`
+              }
+            />
 
-            <div className="rounded-3xl border border-blue-400/30 bg-blue-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-blue-200">Projected Votes</p>
-              <h2 className="mt-3 text-4xl font-black sm:text-5xl">
-                {formatNumber(stats.projectedVotes)}
-              </h2>
-              <p className="mt-3 text-sm text-blue-100">
-                {stats.votesNeededFromProjected > 0
+            <HeroMetric
+              title="Projected Votes"
+              value={formatNumber(stats.projectedVotes)}
+              tone="blue"
+              subtitle={
+                stats.votesNeededFromProjected > 0
                   ? `${formatNumber(
                       stats.votesNeededFromProjected
                     )} projected votes short`
-                  : "Projection meets the target"}
-              </p>
-            </div>
+                  : "Projection meets the target"
+              }
+            />
           </div>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-slate-300">Vote Target to Win</p>
-              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
-                {formatNumber(stats.target)}
-              </h2>
-              <p className="mt-3 text-sm text-slate-400">
-                Set by Campaign Manager.
-              </p>
-            </div>
+            <HeroMetric
+              title="Vote Target to Win"
+              value={formatNumber(stats.target)}
+              tone="slate"
+              subtitle="Set by Campaign Manager."
+            />
 
-            <div className="rounded-3xl border border-purple-400/30 bg-purple-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-purple-200">Leaning Supporters</p>
-              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
-                {formatNumber(stats.leaning)}
-              </h2>
-              <p className="mt-3 text-sm text-purple-100">
-                Counted as 50% in projection.
-              </p>
-            </div>
+            <HeroMetric
+              title="Leaning Supporters"
+              value={formatNumber(stats.leaning)}
+              tone="purple"
+              subtitle="Counted as 50% in projection."
+            />
 
-            <div className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-amber-200">
-                Confirmed Not Yet Voted
-              </p>
-              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
-                {formatNumber(stats.confirmedNotVoted)}
-              </h2>
-              <p className="mt-3 text-sm text-amber-100">
-                Key turnout follow-up group.
-              </p>
-            </div>
+            <HeroMetric
+              title="Confirmed Not Yet Voted"
+              value={formatNumber(stats.confirmedNotVoted)}
+              tone="amber"
+              subtitle="Key turnout follow-up group."
+            />
 
-            <div className="rounded-3xl border border-green-400/30 bg-green-500/10 p-5 shadow-xl sm:p-6">
-              <p className="text-sm text-green-200">Confirmed Voted</p>
-              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
-                {formatNumber(stats.confirmedVoted)}
-              </h2>
-              <p className="mt-3 text-sm text-green-100">
-                {stats.confirmedTurnoutRate}% of confirmed supporters voted.
-              </p>
-            </div>
+            <HeroMetric
+              title="Confirmed Voted"
+              value={formatNumber(stats.confirmedVoted)}
+              tone="green"
+              subtitle={`${stats.confirmedTurnoutRate}% of confirmed supporters voted.`}
+            />
           </div>
         </div>
       </section>
@@ -861,8 +955,8 @@ export default function DashboardPage() {
           <div className="grid gap-6 xl:grid-cols-3">
             <section className="rounded-3xl bg-white p-5 shadow sm:p-6 xl:col-span-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900">
+                <div className="min-w-0">
+                  <h2 className="break-words text-2xl font-black text-slate-900">
                     Victory Risk Indicators
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -879,68 +973,49 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-2xl bg-red-50 p-5">
-                  <p className="text-sm text-red-700">Unassigned Voters</p>
-                  <h3 className="mt-2 text-3xl font-black text-red-800">
-                    {formatNumber(stats.unassigned)}
-                  </h3>
-                  <p className="mt-2 text-sm text-red-700">
-                    Not assigned to a campaigner.
-                  </p>
-                </div>
+                <RiskCard
+                  title="Unassigned Voters"
+                  value={formatNumber(stats.unassigned)}
+                  subtitle="Not assigned to a campaigner."
+                  tone="red"
+                />
 
-                <div className="rounded-2xl bg-amber-50 p-5">
-                  <p className="text-sm text-amber-700">Pickup Issues</p>
-                  <h3 className="mt-2 text-3xl font-black text-amber-800">
-                    {formatNumber(stats.pickupIssues)}
-                  </h3>
-                  <p className="mt-2 text-sm text-amber-700">
-                    Requires immediate attention.
-                  </p>
-                </div>
+                <RiskCard
+                  title="Pickup Issues"
+                  value={formatNumber(stats.pickupIssues)}
+                  subtitle="Requires immediate attention."
+                  tone="amber"
+                />
 
-                <div className="rounded-2xl bg-orange-50 p-5">
-                  <p className="text-sm text-orange-700">
-                    Confirmed Pickup Not Voted
-                  </p>
-                  <h3 className="mt-2 text-3xl font-black text-orange-800">
-                    {formatNumber(stats.confirmedPickupNotVoted)}
-                  </h3>
-                  <p className="mt-2 text-sm text-orange-700">
-                    Confirmed supporters needing transportation.
-                  </p>
-                </div>
+                <RiskCard
+                  title="Confirmed Pickup Not Voted"
+                  value={formatNumber(stats.confirmedPickupNotVoted)}
+                  subtitle="Confirmed supporters needing transport."
+                  tone="orange"
+                />
 
-                <div className="rounded-2xl bg-slate-50 p-5">
-                  <p className="text-sm text-slate-500">Unknown Status</p>
-                  <h3 className="mt-2 text-3xl font-black text-slate-900">
-                    {formatNumber(stats.unknown)}
-                  </h3>
-                  <p className="mt-2 text-sm text-slate-500">
-                    Needs classification.
-                  </p>
-                </div>
+                <RiskCard
+                  title="Unknown Status"
+                  value={formatNumber(stats.unknown)}
+                  subtitle="Needs classification."
+                  tone="slate"
+                />
 
-                <div className="rounded-2xl bg-purple-50 p-5">
-                  <p className="text-sm text-purple-700">Undecided</p>
-                  <h3 className="mt-2 text-3xl font-black text-purple-800">
-                    {formatNumber(stats.undecided)}
-                  </h3>
-                  <p className="mt-2 text-sm text-purple-700">
-                    Not counted in projection.
-                  </p>
-                </div>
+                <RiskCard
+                  title="Undecided"
+                  value={formatNumber(stats.undecided)}
+                  subtitle="Not counted in projection."
+                  tone="purple"
+                />
 
-                <div className="rounded-2xl bg-blue-50 p-5">
-                  <p className="text-sm text-blue-700">Assignment Coverage</p>
-                  <h3 className="mt-2 text-3xl font-black text-blue-800">
-                    {stats.assignmentRate}%
-                  </h3>
-                  <p className="mt-2 text-sm text-blue-700">
-                    {formatNumber(stats.assigned)} assigned of{" "}
-                    {formatNumber(stats.total)}.
-                  </p>
-                </div>
+                <RiskCard
+                  title="Assignment Coverage"
+                  value={`${stats.assignmentRate}%`}
+                  subtitle={`${formatNumber(stats.assigned)} assigned of ${formatNumber(
+                    stats.total
+                  )}.`}
+                  tone="blue"
+                />
               </div>
             </section>
 
@@ -954,63 +1029,46 @@ export default function DashboardPage() {
               </p>
 
               <div className="mt-6 grid gap-3">
-                <Link
-                  href="/voters"
-                  className="rounded-2xl border border-slate-200 p-4 font-bold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  Review voter support status
-                </Link>
-
-                <Link
-                  href="/campaigners"
-                  className="rounded-2xl border border-slate-200 p-4 font-bold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  Open field operation view
-                </Link>
-
-                <Link
-                  href="/team"
-                  className="rounded-2xl border border-slate-200 p-4 font-bold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  Manage team access
-                </Link>
-
-                <Link
-                  href="/upload"
-                  className="rounded-2xl border border-slate-200 p-4 font-bold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  Upload updated voter CSV
-                </Link>
-
-                <Link
-                  href="/campaign-setup"
-                  className="rounded-2xl border border-slate-200 p-4 font-bold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  Update vote target, zones, polling areas
-                </Link>
+                {[
+                  ["Review voter support status", "/voters"],
+                  ["Open field operation view", "/campaigners"],
+                  ["Manage team access", "/team"],
+                  ["Upload updated voter CSV", "/upload"],
+                  ["Update vote target, zones, polling areas", "/campaign-setup"],
+                ].map(([label, href]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="rounded-2xl border border-slate-200 p-4 font-bold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
+                  >
+                    {label}
+                  </Link>
+                ))}
               </div>
             </section>
           </div>
 
           <section className="mt-6 rounded-3xl bg-white p-5 shadow sm:p-6">
-            <h2 className="text-2xl font-black text-slate-900">
-              Zone Battle Map
-            </h2>
+            <div className="min-w-0">
+              <h2 className="break-words text-2xl font-black text-slate-900">
+                Zone Battle Map
+              </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Shows which zones are carrying the campaign and where turnout or
-              pickup risks exist.
-            </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Shows which zones are carrying the campaign and where turnout or
+                pickup risks exist.
+              </p>
+            </div>
 
-            <div className="mt-6 grid gap-4 md:hidden">
+            <div className="mt-6 grid gap-4 lg:hidden">
               {zoneSummary.map((item) => (
                 <div
                   key={item.zone}
-                  className="rounded-2xl border border-slate-200 p-4"
+                  className="min-w-0 rounded-2xl border border-slate-200 p-4"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-xl font-black text-slate-900">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="break-words text-xl font-black text-slate-900">
                         {item.zone}
                       </h3>
                       <p className="text-sm text-slate-500">
@@ -1019,7 +1077,7 @@ export default function DashboardPage() {
                     </div>
 
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-black ${
+                      className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-black ${
                         item.pickupIssues > 0
                           ? "bg-red-100 text-red-800"
                           : "bg-green-100 text-green-800"
@@ -1070,14 +1128,14 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="mt-4 grid gap-2 text-sm text-slate-700">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <span>Confirmed Voted</span>
                       <span className="font-bold">
                         {formatNumber(item.confirmedVoted)}
                       </span>
                     </div>
 
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <span>Pickup Needed</span>
                       <span className="font-bold text-orange-700">
                         {formatNumber(item.pickupNeeded)}
@@ -1094,7 +1152,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="mt-6 hidden overflow-x-auto md:block">
+            <div className="mt-6 hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead>
                   <tr className="border-b bg-slate-50 text-slate-600">
@@ -1194,9 +1252,9 @@ export default function DashboardPage() {
                       key={item.pollingArea}
                       className="rounded-2xl border border-slate-200 p-4"
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="font-black text-slate-900">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words font-black text-slate-900">
                             Polling Area {item.pollingArea}
                           </p>
                           <p className="text-sm text-slate-500">
@@ -1210,11 +1268,8 @@ export default function DashboardPage() {
                         </p>
                       </div>
 
-                      <div className="mt-3 h-3 rounded-full bg-slate-200">
-                        <div
-                          className="h-3 rounded-full bg-green-600"
-                          style={{ width: `${turnout}%` }}
-                        />
+                      <div className="mt-3">
+                        <ProgressBar value={turnout} tone="green" />
                       </div>
                     </div>
                   );
@@ -1243,9 +1298,9 @@ export default function DashboardPage() {
                     key={item.id}
                     className="rounded-2xl border border-slate-200 p-4"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-black text-slate-900">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="break-words font-black text-slate-900">
                           {index + 1}. {item.name}
                         </p>
                         <p className="text-sm text-slate-500">
@@ -1257,7 +1312,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-blue-50 px-4 py-2 text-right">
+                      <div className="w-full rounded-2xl bg-blue-50 px-4 py-2 text-left sm:w-auto sm:text-right">
                         <p className="text-2xl font-black text-blue-800">
                           {formatNumber(item.confirmed)}
                         </p>
@@ -1306,12 +1361,12 @@ export default function DashboardPage() {
                     className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
                   >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
                           {getRegNo(voter)}
                         </p>
 
-                        <p className="mt-1 text-lg font-black text-slate-900">
+                        <p className="mt-1 break-words text-lg font-black text-slate-900">
                           {getDisplayName(voter)}
                         </p>
 
@@ -1321,13 +1376,13 @@ export default function DashboardPage() {
                         </p>
 
                         {voter.notes && (
-                          <p className="mt-2 text-sm text-amber-900">
+                          <p className="mt-2 break-words text-sm text-amber-900">
                             {voter.notes}
                           </p>
                         )}
                       </div>
 
-                      <span className="w-fit rounded-full bg-amber-200 px-3 py-1 text-xs font-black text-amber-900">
+                      <span className="w-fit shrink-0 rounded-full bg-amber-200 px-3 py-1 text-xs font-black text-amber-900">
                         Issue
                       </span>
                     </div>
@@ -1352,47 +1407,41 @@ export default function DashboardPage() {
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-5">
-                  <p className="text-sm text-slate-500">Total Team</p>
-                  <h3 className="mt-2 text-3xl font-black text-slate-900">
-                    {teamStats.total}
-                  </h3>
-                </div>
+                <SmallCountCard
+                  title="Total Team"
+                  value={teamStats.total}
+                  tone="slate"
+                />
 
-                <div className="rounded-2xl bg-purple-50 p-5">
-                  <p className="text-sm text-purple-700">Zone Leaders</p>
-                  <h3 className="mt-2 text-3xl font-black text-purple-800">
-                    {teamStats.zoneLeaders}
-                  </h3>
-                </div>
+                <SmallCountCard
+                  title="Zone Leaders"
+                  value={teamStats.zoneLeaders}
+                  tone="purple"
+                />
 
-                <div className="rounded-2xl bg-green-50 p-5">
-                  <p className="text-sm text-green-700">Campaigners</p>
-                  <h3 className="mt-2 text-3xl font-black text-green-800">
-                    {teamStats.campaigners}
-                  </h3>
-                </div>
+                <SmallCountCard
+                  title="Campaigners"
+                  value={teamStats.campaigners}
+                  tone="green"
+                />
 
-                <div className="rounded-2xl bg-amber-50 p-5">
-                  <p className="text-sm text-amber-700">Drivers</p>
-                  <h3 className="mt-2 text-3xl font-black text-amber-800">
-                    {teamStats.drivers}
-                  </h3>
-                </div>
+                <SmallCountCard
+                  title="Drivers"
+                  value={teamStats.drivers}
+                  tone="amber"
+                />
 
-                <div className="rounded-2xl bg-red-50 p-5">
-                  <p className="text-sm text-red-700">Scrutineers</p>
-                  <h3 className="mt-2 text-3xl font-black text-red-800">
-                    {teamStats.scrutineers}
-                  </h3>
-                </div>
+                <SmallCountCard
+                  title="Scrutineers"
+                  value={teamStats.scrutineers}
+                  tone="red"
+                />
 
-                <div className="rounded-2xl bg-blue-50 p-5">
-                  <p className="text-sm text-blue-700">Managers</p>
-                  <h3 className="mt-2 text-3xl font-black text-blue-800">
-                    {teamStats.managers}
-                  </h3>
-                </div>
+                <SmallCountCard
+                  title="Managers"
+                  value={teamStats.managers}
+                  tone="blue"
+                />
               </div>
             </section>
           </div>
