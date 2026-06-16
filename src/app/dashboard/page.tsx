@@ -912,7 +912,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm sm:mt-8 sm:p-6">
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-8 sm:p-6">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:text-sm">
@@ -941,7 +941,7 @@ export default function DashboardPage() {
 
             <div className="mt-4">
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-slate-500">Projected</span>
+                <span className="text-slate-500">Projected to target</span>
                 <span className="font-black text-slate-900">
                   {formatNumber(stats.projectedVotes)} /{" "}
                   {formatNumber(stats.target)}
@@ -960,76 +960,199 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-100 text-slate-600">
-                    <th className="px-3 py-2 font-black sm:px-4 sm:py-3">
-                      Group
-                    </th>
-                    <th className="px-3 py-2 text-right font-black sm:px-4 sm:py-3">
-                      Voted
-                    </th>
-                    <th className="px-3 py-2 text-right font-black sm:px-4 sm:py-3">
-                      Total
-                    </th>
-                    <th className="px-3 py-2 text-right font-black sm:px-4 sm:py-3">
-                      Left
-                    </th>
-                  </tr>
-                </thead>
+            <div className="mt-5 grid gap-4 xl:grid-cols-2">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 bg-slate-50 px-3 py-3 sm:px-4">
+                  <h3 className="text-sm font-black text-slate-900">
+                    Projected Voter Position
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Before election-day turnout is considered.
+                  </p>
+                </div>
 
-                <tbody>
-                  <tr className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
-                      Team Rigo
-                    </td>
-                    <td className="px-3 py-3 text-right font-black text-green-700 sm:px-4">
-                      {formatNumber(stats.confirmedVoted)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
-                      {formatNumber(stats.confirmed)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold text-amber-700 sm:px-4">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500">
+                      <th className="px-3 py-2 font-black sm:px-4">Group</th>
+                      <th className="px-3 py-2 text-right font-black sm:px-4">
+                        Base
+                      </th>
+                      <th className="px-3 py-2 text-right font-black sm:px-4">
+                        Leaning
+                      </th>
+                      <th className="px-3 py-2 text-right font-black sm:px-4">
+                        Projected
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <tr className="border-b border-slate-100">
+                      <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
+                        Team Rigo
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-green-700 sm:px-4">
+                        {formatNumber(stats.confirmed)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-purple-700 sm:px-4">
+                        {formatNumber(stats.leaning)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-black text-blue-700 sm:px-4">
+                        {formatNumber(stats.projectedVotes)}
+                      </td>
+                    </tr>
+
+                    <tr className="border-b border-slate-100">
+                      <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
+                        {opponentName}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-red-700 sm:px-4">
+                        {formatNumber(stats.notSupporting)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-slate-400 sm:px-4">
+                        —
+                      </td>
+                      <td className="px-3 py-3 text-right font-black text-red-700 sm:px-4">
+                        {formatNumber(stats.opponentEstimate)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
+                        Undecided
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-amber-700 sm:px-4">
+                        {formatNumber(stats.undecided)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-slate-400 sm:px-4">
+                        —
+                      </td>
+                      <td className="px-3 py-3 text-right font-black text-amber-700 sm:px-4">
+                        {formatNumber(stats.undecided)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-slate-900">
+                      Voting Started Comparison
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Voters marked as voted, grouped by support status.
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                    {formatNumber(stats.votedComparisonTotal)} voted
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-black text-slate-900">
+                        Team Rigo
+                      </span>
+                      <span className="font-black text-green-700">
+                        {formatNumber(stats.confirmedVoted)}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-3 rounded-full bg-green-600"
+                        style={{
+                          width: `${clampPercentage(
+                            percentage(
+                              stats.confirmedVoted,
+                              stats.votedComparisonTotal
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-black text-slate-900">
+                        {opponentName}
+                      </span>
+                      <span className="font-black text-red-700">
+                        {formatNumber(stats.opponentVoted)}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-3 rounded-full bg-red-600"
+                        style={{
+                          width: `${clampPercentage(
+                            percentage(
+                              stats.opponentVoted,
+                              stats.votedComparisonTotal
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-black text-slate-900">
+                        Undecided
+                      </span>
+                      <span className="font-black text-amber-700">
+                        {formatNumber(stats.undecidedVoted)}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-3 rounded-full bg-amber-500"
+                        style={{
+                          width: `${clampPercentage(
+                            percentage(
+                              stats.undecidedVoted,
+                              stats.votedComparisonTotal
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded-xl bg-green-50 p-2 text-green-800">
+                    Left{" "}
+                    <span className="font-black">
                       {formatNumber(stats.confirmedNotVoted)}
-                    </td>
-                  </tr>
+                    </span>
+                  </div>
 
-                  <tr className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
-                      {opponentName}
-                    </td>
-                    <td className="px-3 py-3 text-right font-black text-red-700 sm:px-4">
-                      {formatNumber(stats.opponentVoted)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
-                      {formatNumber(stats.notSupporting)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                  <div className="rounded-xl bg-red-50 p-2 text-red-800">
+                    Left{" "}
+                    <span className="font-black">
                       {formatNumber(stats.opponentNotVoted)}
-                    </td>
-                  </tr>
+                    </span>
+                  </div>
 
-                  <tr>
-                    <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
-                      Undecided
-                    </td>
-                    <td className="px-3 py-3 text-right font-black text-purple-700 sm:px-4">
-                      {formatNumber(stats.undecidedVoted)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
-                      {formatNumber(stats.undecided)}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold text-slate-700 sm:px-4">
+                  <div className="rounded-xl bg-amber-50 p-2 text-amber-800">
+                    Left{" "}
+                    <span className="font-black">
                       {formatNumber(stats.undecidedNotVoted)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <p className="mt-3 text-xs text-slate-500">
-              This table combines support status with the scrutineer voted
+              The live comparison uses support status plus the scrutineer voted
               marker. It is not a record of anyone’s private ballot.
             </p>
           </div>
