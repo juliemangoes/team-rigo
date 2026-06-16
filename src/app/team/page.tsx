@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+type TeamProfile = {
+  id: string;
+  full_name: string;
+  email: string | null;
+  role: string | null;
+  zone: string | null;
+};
+
 type TeamMember = {
   id: string;
   full_name: string;
@@ -14,22 +22,25 @@ type TeamMember = {
   assigned_classroom: string | null;
   surname_from: string | null;
   surname_to: string | null;
-  created_at?: string;
+  created_at: string | null;
 };
 
-type TeamForm = {
-  full_name: string;
-  email: string;
-  phone: string;
-  zone: string;
-  role: string;
-  assigned_polling_area: string;
-  assigned_classroom: string;
-  surname_from: string;
-  surname_to: string;
+type CampaignZone = {
+  id: string;
+  name: string;
+  description: string | null;
+  display_order: number | null;
 };
 
-const roles = [
+type PollingArea = {
+  id: string;
+  code: string;
+  name: string | null;
+  location: string | null;
+  display_order: number | null;
+};
+
+const roleOptions = [
   "Campaign Manager",
   "Zone Leader",
   "Campaigner",
@@ -37,68 +48,201 @@ const roles = [
   "Scrutineer",
 ];
 
-const surnameLetters = [
-  "",
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H",
-  "I",
-  "J",
-  "K",
-  "L",
-  "M",
-  "N",
-  "O",
-  "P",
-  "Q",
-  "R",
-  "S",
-  "T",
-  "U",
-  "V",
-  "W",
-  "X",
-  "Y",
-  "Z",
-];
-
-const defaultForm: TeamForm = {
+const emptyForm = {
   full_name: "",
   email: "",
   phone: "",
-  zone: "",
   role: "Campaigner",
+  zone: "",
   assigned_polling_area: "",
   assigned_classroom: "",
   surname_from: "",
   surname_to: "",
 };
 
-export default function TeamSetupPage() {
-  const [team, setTeam] = useState<TeamMember[]>([]);
-  const [form, setForm] = useState<TeamForm>(defaultForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
+type TeamForm = typeof emptyForm;
 
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("All");
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value || 0);
+}
+
+function rolePillClass(role: string | null) {
+  if (role === "Campaign Manager") return "bg-blue-100 text-blue-800";
+  if (role === "Zone Leader") return "bg-purple-100 text-purple-800";
+  if (role === "Campaigner") return "bg-green-100 text-green-800";
+  if (role === "Driver") return "bg-amber-100 text-amber-800";
+  if (role === "Scrutineer") return "bg-red-100 text-red-800";
+
+  return "bg-slate-100 text-slate-700";
+}
+
+function initials(name: string | null | undefined) {
+  if (!name) return "TR";
+
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) return "TR";
+
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      placeholder={placeholder}
+    />
+  );
+}
+
+function SelectInput({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+    >
+      {children}
+    </select>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+  tone = "slate",
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  tone?: "blue" | "green" | "red" | "amber" | "purple" | "slate";
+}) {
+  const color =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
+      : tone === "green"
+      ? "border-green-100 bg-green-50 text-green-700"
+      : tone === "red"
+      ? "border-red-100 bg-red-50 text-red-700"
+      : tone === "amber"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : tone === "purple"
+      ? "border-purple-100 bg-purple-50 text-purple-700"
+      : "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <div className={`rounded-3xl border p-4 shadow-sm ${color}`}>
+      <p className="text-xs font-black uppercase tracking-wide opacity-65">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
+      {detail && <p className="mt-1 text-xs font-semibold opacity-70">{detail}</p>}
+    </div>
+  );
+}
+
+export default function TeamSetupPage() {
+  const [profile, setProfile] = useState<TeamProfile | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [campaignZones, setCampaignZones] = useState<CampaignZone[]>([]);
+  const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("All");
+  const [zoneFilter, setZoneFilter] = useState("All");
+
+  const [form, setForm] = useState<TeamForm>(emptyForm);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const canAccess = profile?.role === "Campaign Manager";
+
   useEffect(() => {
-    loadTeam();
+    loadPage();
   }, []);
 
-  async function loadTeam() {
+  async function loadPage() {
     setLoading(true);
     setMessage("");
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const email = sessionData.session?.user.email;
+
+    if (!email) {
+      setMessage("No login email found.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("campaigners")
+      .select("id, full_name, email, role, zone")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Profile error:", profileError);
+      setMessage("Error loading your team profile.");
+      setLoading(false);
+      return;
+    }
+
+    if (!profileData) {
+      setMessage("No Team Rigo profile found for this login email.");
+      setLoading(false);
+      return;
+    }
+
+    setProfile(profileData);
+
+    await Promise.all([loadTeamMembers(), loadCampaignZones(), loadPollingAreas()]);
+
+    setLoading(false);
+  }
+
+  async function loadTeamMembers() {
     const { data, error } = await supabase
       .from("campaigners")
       .select(
@@ -119,220 +263,184 @@ export default function TeamSetupPage() {
       .order("full_name", { ascending: true });
 
     if (error) {
-      console.error("Team load error:", error);
-      setMessage(error.message || "Error loading team members.");
-      setTeam([]);
-    } else {
-      setTeam(data || []);
+      console.error("Team members error:", error);
+      setTeamMembers([]);
+      return;
     }
 
-    setLoading(false);
+    setTeamMembers(data || []);
   }
 
-  const filteredTeam = useMemo(() => {
-    const term = search.toLowerCase().trim();
+  async function loadCampaignZones() {
+    const { data, error } = await supabase
+      .from("campaign_zones")
+      .select("id, name, description, display_order")
+      .order("display_order", { ascending: true })
+      .order("name", { ascending: true });
 
-    return team.filter((member) => {
-      const matchesSearch =
-        !term ||
-        member.full_name.toLowerCase().includes(term) ||
-        (member.email || "").toLowerCase().includes(term) ||
-        (member.phone || "").toLowerCase().includes(term) ||
-        (member.zone || "").toLowerCase().includes(term) ||
-        (member.role || "").toLowerCase().includes(term) ||
-        (member.assigned_polling_area || "").toLowerCase().includes(term) ||
-        (member.assigned_classroom || "").toLowerCase().includes(term);
+    if (error) {
+      console.error("Campaign zones error:", error);
+      setCampaignZones([]);
+      return;
+    }
 
-      const matchesRole = roleFilter === "All" || member.role === roleFilter;
+    setCampaignZones(data || []);
+  }
 
-      return matchesSearch && matchesRole;
-    });
-  }, [team, search, roleFilter]);
+  async function loadPollingAreas() {
+    const { data, error } = await supabase
+      .from("polling_areas")
+      .select("id, code, name, location, display_order")
+      .order("display_order", { ascending: true })
+      .order("code", { ascending: true });
 
-  const stats = useMemo(() => {
-    return {
-      total: team.length,
-      managers: team.filter((member) => member.role === "Campaign Manager")
-        .length,
-      campaigners: team.filter((member) => member.role === "Campaigner").length,
-      zoneLeaders: team.filter((member) => member.role === "Zone Leader")
-        .length,
-      drivers: team.filter((member) => member.role === "Driver").length,
-      scrutineers: team.filter((member) => member.role === "Scrutineer").length,
-    };
-  }, [team]);
+    if (error) {
+      console.error("Polling areas error:", error);
+      setPollingAreas([]);
+      return;
+    }
+
+    setPollingAreas(data || []);
+  }
 
   function updateForm(field: keyof TeamForm, value: string) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function resetForm() {
-    setForm(defaultForm);
-    setEditingId(null);
+  function openCreateForm() {
+    setEditingMember(null);
+    setForm(emptyForm);
+    setShowForm(true);
+    setMessage("");
   }
 
-  function startEdit(member: TeamMember) {
-    setEditingId(member.id);
-
+  function openEditForm(member: TeamMember) {
+    setEditingMember(member);
     setForm({
       full_name: member.full_name || "",
       email: member.email || "",
       phone: member.phone || "",
-      zone: member.zone || "",
       role: member.role || "Campaigner",
+      zone: member.zone || "",
       assigned_polling_area: member.assigned_polling_area || "",
       assigned_classroom: member.assigned_classroom || "",
       surname_from: member.surname_from || "",
       surname_to: member.surname_to || "",
     });
-
+    setShowForm(true);
     setMessage("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeForm() {
+    setEditingMember(null);
+    setForm(emptyForm);
+    setShowForm(false);
+  }
+
+  function buildPayload() {
+    const role = form.role || "Campaigner";
+    const isScrutineer = role === "Scrutineer";
+
+    return {
+      full_name: form.full_name.trim(),
+      email: normalizeEmail(form.email) || null,
+      phone: form.phone.trim() || null,
+      role,
+      zone: form.zone || null,
+      assigned_polling_area: isScrutineer
+        ? form.assigned_polling_area || null
+        : null,
+      assigned_classroom: isScrutineer
+        ? form.assigned_classroom.trim() || null
+        : null,
+      surname_from: isScrutineer ? form.surname_from.trim().toUpperCase() || null : null,
+      surname_to: isScrutineer ? form.surname_to.trim().toUpperCase() || null : null,
+    };
+  }
+
+  function validateForm() {
+    if (!form.full_name.trim()) return "Enter the team member's full name.";
+
+    if (!form.email.trim()) {
+      return "Enter the email address used for login.";
+    }
+
+    if (form.email.trim() && !form.email.includes("@")) {
+      return "Enter a valid email address.";
+    }
+
+    if (!form.role) return "Select a role.";
+
+    if (form.role === "Scrutineer") {
+      if (!form.assigned_polling_area) {
+        return "Select the scrutineer's polling area.";
+      }
+
+      if (!form.assigned_classroom.trim()) {
+        return "Enter the scrutineer's classroom.";
+      }
+
+      if (!form.surname_from.trim() || !form.surname_to.trim()) {
+        return "Enter the scrutineer's surname range.";
+      }
+    }
+
+    return "";
   }
 
   async function saveMember() {
-    if (!form.full_name.trim()) {
-      setMessage("Full name is required.");
-      alert("Full name is required.");
+    if (!canAccess) return;
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setMessage(validationError);
       return;
     }
-
-    if (!form.email.trim()) {
-      setMessage("Email is required. This must match the login email.");
-      alert("Email is required. This must match the login email.");
-      return;
-    }
-
-    if (!form.role.trim()) {
-      setMessage("Role is required.");
-      alert("Role is required.");
-      return;
-    }
-
-if (form.role === "Scrutineer") {
-  const missingFields = [];
-
-  if (!form.assigned_polling_area.trim()) {
-    missingFields.push("Polling Area");
-  }
-
-  if (!form.assigned_classroom.trim()) {
-    missingFields.push("Classroom");
-  }
-
-  if (!form.surname_from.trim()) {
-    missingFields.push("Surname From");
-  }
-
-  if (!form.surname_to.trim()) {
-    missingFields.push("Surname To");
-  }
-
-  if (missingFields.length > 0) {
-    const errorMessage = `Please complete these scrutineer fields: ${missingFields.join(
-      ", "
-    )}.
-
-Current values detected:
-Polling Area: ${form.assigned_polling_area || "blank"}
-Classroom: ${form.assigned_classroom || "blank"}
-Surname From: ${form.surname_from || "blank"}
-Surname To: ${form.surname_to || "blank"}`;
-
-    setMessage(errorMessage);
-    alert(errorMessage);
-    return;
-  }
-}
 
     setSaving(true);
     setMessage("");
 
-    try {
-      const isScrutineer = form.role === "Scrutineer";
+    const payload = buildPayload();
 
-      const payload = {
-        full_name: form.full_name.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim() || null,
-        zone: form.zone.trim() || null,
-        role: form.role,
-        assigned_polling_area: isScrutineer
-          ? form.assigned_polling_area.trim()
-          : null,
-        assigned_classroom: isScrutineer
-          ? form.assigned_classroom.trim()
-          : null,
-        surname_from: isScrutineer
-          ? form.surname_from.trim().toUpperCase()
-          : null,
-        surname_to: isScrutineer ? form.surname_to.trim().toUpperCase() : null,
-      };
-
-      let error;
-
-      if (editingId) {
-        const result = await supabase
-          .from("campaigners")
-          .update(payload)
-          .eq("id", editingId)
-          .select()
-          .single();
-
-        error = result.error;
-      } else {
-        const result = await supabase
-          .from("campaigners")
-          .insert(payload)
-          .select()
-          .single();
-
-        error = result.error;
-      }
+    if (editingMember) {
+      const { error } = await supabase
+        .from("campaigners")
+        .update(payload)
+        .eq("id", editingMember.id);
 
       if (error) {
-        console.error("Save team member error:", error);
-
-        const errorMessage =
-          error.message ||
-          "Error saving team member. Check if the email already exists or if your account has Campaign Manager access.";
-
-        setMessage(errorMessage);
-        alert(errorMessage);
+        console.error("Update team member error:", error);
+        setMessage(error.message || "Error updating team member.");
         setSaving(false);
         return;
       }
 
-      const successMessage = editingId
-        ? "Team member updated successfully."
-        : "Team member added successfully.";
+      setMessage("Team member updated.");
+    } else {
+      const { error } = await supabase.from("campaigners").insert(payload);
 
-      resetForm();
-      await loadTeam();
+      if (error) {
+        console.error("Add team member error:", error);
+        setMessage(error.message || "Error adding team member.");
+        setSaving(false);
+        return;
+      }
 
-      setMessage(successMessage);
-      alert(successMessage);
-    } catch (error) {
-      console.error("Unexpected save error:", error);
-
-      setMessage("Unexpected error saving team member.");
-      alert("Unexpected error saving team member. Check the browser console.");
+      setMessage("Team member added.");
     }
 
+    await loadTeamMembers();
+    closeForm();
     setSaving(false);
   }
 
   async function deleteMember(member: TeamMember) {
-    const confirmed = confirm(
-      `Delete ${member.full_name}? This will remove the team profile but not the login account from Supabase Auth.`
-    );
+    if (!canAccess) return;
+
+    const confirmed = confirm(`Delete ${member.full_name}?`);
 
     if (!confirmed) return;
-
-    setMessage("");
 
     const { error } = await supabase
       .from("campaigners")
@@ -340,27 +448,81 @@ Surname To: ${form.surname_to || "blank"}`;
       .eq("id", member.id);
 
     if (error) {
-      console.error("Delete error:", error);
+      console.error("Delete team member error:", error);
       setMessage(error.message || "Error deleting team member.");
-      alert(error.message || "Error deleting team member.");
       return;
     }
 
     setMessage("Team member deleted.");
-    alert("Team member deleted.");
-    await loadTeam();
+    await loadTeamMembers();
   }
+
+  const zoneOptions = useMemo(() => {
+    const zones = new Set<string>();
+
+    zones.add("All Zones");
+
+    campaignZones.forEach((zone) => {
+      if (zone.name) zones.add(zone.name);
+    });
+
+    teamMembers.forEach((member) => {
+      if (member.zone) zones.add(member.zone);
+    });
+
+    return Array.from(zones).sort();
+  }, [campaignZones, teamMembers]);
+
+  function pollingAreaLabel(code: string) {
+    const area = pollingAreas.find((item) => item.code === code);
+
+    if (!area) return code;
+
+    return area.name ? `${area.code} - ${area.name}` : area.code;
+  }
+
+  const filteredMembers = useMemo(() => {
+    const cleanSearch = search.trim().toLowerCase();
+
+    return teamMembers.filter((member) => {
+      const matchesSearch =
+        !cleanSearch ||
+        member.full_name.toLowerCase().includes(cleanSearch) ||
+        (member.email || "").toLowerCase().includes(cleanSearch) ||
+        (member.phone || "").toLowerCase().includes(cleanSearch) ||
+        (member.zone || "").toLowerCase().includes(cleanSearch) ||
+        (member.assigned_polling_area || "").toLowerCase().includes(cleanSearch);
+
+      const matchesRole = roleFilter === "All" || member.role === roleFilter;
+      const matchesZone = zoneFilter === "All" || member.zone === zoneFilter;
+
+      return matchesSearch && matchesRole && matchesZone;
+    });
+  }, [teamMembers, search, roleFilter, zoneFilter]);
+
+  const teamStats = useMemo(() => {
+    return {
+      total: teamMembers.length,
+      managers: teamMembers.filter((member) => member.role === "Campaign Manager")
+        .length,
+      zoneLeaders: teamMembers.filter((member) => member.role === "Zone Leader")
+        .length,
+      campaigners: teamMembers.filter((member) => member.role === "Campaigner")
+        .length,
+      drivers: teamMembers.filter((member) => member.role === "Driver").length,
+      scrutineers: teamMembers.filter((member) => member.role === "Scrutineer")
+        .length,
+      missingEmail: teamMembers.filter((member) => !member.email).length,
+    };
+  }, [teamMembers]);
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6">
+      <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-2xl bg-white p-8 text-center shadow">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
-
-            <h1 className="mt-3 text-2xl font-bold text-slate-900">
+          <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading team setup...
             </h1>
           </div>
@@ -369,393 +531,300 @@ Surname To: ${form.surname_to || "blank"}`;
     );
   }
 
+  if (!canAccess) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
+        <div className="w-full max-w-xl rounded-3xl bg-white p-6 text-center shadow-sm sm:p-8">
+          <h1 className="text-2xl font-black text-slate-900">
+            Campaign Manager Access Only
+          </h1>
+
+          <p className="mt-3 text-slate-600">
+            Team setup is restricted to the Campaign Manager.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
+    <main className="min-h-screen overflow-x-hidden bg-slate-100">
+      <section className="bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+                Team Setup
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-slate-500 sm:text-base">
+                Manage team members, role access, zones, and scrutineer
+                classroom assignments.
+              </p>
+            </div>
 
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
-              Team Setup
-            </h1>
-
-            <p className="mt-2 text-slate-600">
-              Manage campaign users, roles, login emails, and scrutineer
-              classroom assignments.
-            </p>
-          </div>
-
-          <button
-            onClick={loadTeam}
-            className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-800"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {message && (
-          <div className="mb-6 rounded-xl bg-blue-50 p-4 text-sm font-medium text-blue-900">
-            {message}
-          </div>
-        )}
-
-        <div className="mb-6 grid gap-4 md:grid-cols-6">
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Total</p>
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              {stats.total}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Managers</p>
-            <h2 className="mt-2 text-3xl font-bold text-blue-700">
-              {stats.managers}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Zone Leaders</p>
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              {stats.zoneLeaders}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Campaigners</p>
-            <h2 className="mt-2 text-3xl font-bold text-green-700">
-              {stats.campaigners}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Drivers</p>
-            <h2 className="mt-2 text-3xl font-bold text-amber-700">
-              {stats.drivers}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Scrutineers</p>
-            <h2 className="mt-2 text-3xl font-bold text-purple-700">
-              {stats.scrutineers}
-            </h2>
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <section className="rounded-2xl bg-white p-6 shadow">
-            <h2 className="text-xl font-bold text-slate-900">
-              {editingId ? "Edit Team Member" : "Add Team Member"}
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              The email must match the person’s Supabase Auth login email.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Full Name
-                </label>
-
-                <input
-                  value={form.full_name}
-                  onChange={(event) =>
-                    updateForm("full_name", event.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  placeholder="Full name"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Login Email
-                </label>
-
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => updateForm("email", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  placeholder="person@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Phone
-                </label>
-
-                <input
-                  value={form.phone}
-                  onChange={(event) => updateForm("phone", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  placeholder="Phone number"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Zone
-                </label>
-
-                <input
-                  value={form.zone}
-                  onChange={(event) => updateForm("zone", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  placeholder="Zone 1, Zone 2, All Zones..."
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Role
-                </label>
-
-                <select
-                  value={form.role}
-                  onChange={(event) => updateForm("role", event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                >
-                  {roles.map((role) => (
-                    <option key={role}>{role}</option>
-                  ))}
-                </select>
-              </div>
-
-              {form.role === "Scrutineer" && (
-                <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
-                  <h3 className="font-bold text-purple-900">
-                    Scrutineer Classroom Assignment
-                  </h3>
-
-                  <p className="mt-1 text-sm text-purple-800">
-                    This controls which voters the scrutineer can see and mark
-                    as voted.
-                  </p>
-
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <label className="text-sm font-medium text-purple-900">
-                        Polling Area
-                      </label>
-
-                      <select
-                        value={form.assigned_polling_area}
-                        onChange={(event) =>
-                          updateForm(
-                            "assigned_polling_area",
-                            event.target.value
-                          )
-                        }
-                        className="mt-2 w-full rounded-xl border border-purple-200 px-4 py-3 text-slate-900 outline-none focus:border-purple-700"
-                      >
-                        <option value="">Select polling area</option>
-                        <option value="39">39</option>
-                        <option value="40">40</option>
-                        <option value="41">41</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-purple-900">
-                        Classroom
-                      </label>
-
-                      <input
-                        value={form.assigned_classroom}
-                        onChange={(event) =>
-                          updateForm("assigned_classroom", event.target.value)
-                        }
-                        className="mt-2 w-full rounded-xl border border-purple-200 px-4 py-3 text-slate-900 outline-none focus:border-purple-700"
-                        placeholder="Classroom 1"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-sm font-medium text-purple-900">
-                          Surname From
-                        </label>
-
-                        <select
-                          value={form.surname_from}
-                          onChange={(event) =>
-                            updateForm("surname_from", event.target.value)
-                          }
-                          className="mt-2 w-full rounded-xl border border-purple-200 px-4 py-3 text-slate-900 outline-none focus:border-purple-700"
-                        >
-                          {surnameLetters.map((letter) => (
-                            <option key={letter} value={letter}>
-                              {letter || "Select"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium text-purple-900">
-                          Surname To
-                        </label>
-
-                        <select
-                          value={form.surname_to}
-                          onChange={(event) =>
-                            updateForm("surname_to", event.target.value)
-                          }
-                          className="mt-2 w-full rounded-xl border border-purple-200 px-4 py-3 text-slate-900 outline-none focus:border-purple-700"
-                        >
-                          {surnameLetters.map((letter) => (
-                            <option key={letter} value={letter}>
-                              {letter || "Select"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
-                onClick={saveMember}
-                disabled={saving}
-                className="w-full rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                onClick={loadPage}
+                className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:bg-slate-50"
               >
-                {saving
-                  ? "Saving..."
-                  : editingId
-                  ? "Save Changes"
-                  : "Add Team Member"}
+                Refresh
               </button>
 
-              {editingId && (
-                <button
-                  onClick={() => {
-                    resetForm();
-                    setMessage("");
-                  }}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel Edit
-                </button>
-              )}
+              <button
+                onClick={openCreateForm}
+                className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800"
+              >
+                Add Team Member
+              </button>
+            </div>
+          </div>
+
+          {message && (
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+              {message}
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <SummaryCard label="Total" value={formatNumber(teamStats.total)} />
+            <SummaryCard
+              label="Managers"
+              value={formatNumber(teamStats.managers)}
+              tone="blue"
+            />
+            <SummaryCard
+              label="Zone Leaders"
+              value={formatNumber(teamStats.zoneLeaders)}
+              tone="purple"
+            />
+            <SummaryCard
+              label="Campaigners"
+              value={formatNumber(teamStats.campaigners)}
+              tone="green"
+            />
+            <SummaryCard
+              label="Drivers"
+              value={formatNumber(teamStats.drivers)}
+              tone="amber"
+            />
+            <SummaryCard
+              label="Scrutineers"
+              value={formatNumber(teamStats.scrutineers)}
+              detail={
+                teamStats.missingEmail > 0
+                  ? `${formatNumber(teamStats.missingEmail)} missing email`
+                  : undefined
+              }
+              tone={teamStats.missingEmail > 0 ? "red" : "slate"}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 py-5 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-7xl">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr_1fr_auto] lg:items-end">
+              <div>
+                <FieldLabel>Search</FieldLabel>
+                <TextInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Name, email, phone, zone..."
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Role</FieldLabel>
+                <SelectInput value={roleFilter} onChange={setRoleFilter}>
+                  <option>All</option>
+                  {roleOptions.map((role) => (
+                    <option key={role}>{role}</option>
+                  ))}
+                </SelectInput>
+              </div>
+
+              <div>
+                <FieldLabel>Zone</FieldLabel>
+                <SelectInput value={zoneFilter} onChange={setZoneFilter}>
+                  <option>All</option>
+                  {zoneOptions.map((zone) => (
+                    <option key={zone}>{zone}</option>
+                  ))}
+                </SelectInput>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setRoleFilter("All");
+                  setZoneFilter("All");
+                }}
+                className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+              >
+                Clear
+              </button>
             </div>
           </section>
 
-          <section className="rounded-2xl bg-white p-6 shadow lg:col-span-2">
-            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
+                <h2 className="text-xl font-black text-slate-950">
                   Team Members
                 </h2>
-
                 <p className="mt-1 text-sm text-slate-500">
-                  Search, edit, or delete team profiles.
+                  Showing {formatNumber(filteredMembers.length)} of{" "}
+                  {formatNumber(teamMembers.length)} member(s).
                 </p>
-              </div>
-
-              <div className="grid w-full gap-3 md:w-auto md:grid-cols-2">
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  placeholder="Search team..."
-                />
-
-                <select
-                  value={roleFilter}
-                  onChange={(event) => setRoleFilter(event.target.value)}
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                >
-                  <option>All</option>
-                  {roles.map((role) => (
-                    <option key={role}>{role}</option>
-                  ))}
-                </select>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+            <div className="mt-4 grid gap-3 lg:hidden">
+              {filteredMembers.map((member) => (
+                <article
+                  key={member.id}
+                  className="rounded-3xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white">
+                      {initials(member.full_name)}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h3 className="break-words text-lg font-black text-slate-950">
+                        {member.full_name}
+                      </h3>
+
+                      <p className="mt-1 break-words text-sm font-semibold text-slate-500">
+                        {member.email || "No login email"}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${rolePillClass(
+                            member.role
+                          )}`}
+                        >
+                          {member.role || "No Role"}
+                        </span>
+
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                          {member.zone || "No Zone"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {member.role === "Scrutineer" && (
+                    <div className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-800">
+                      Polling {member.assigned_polling_area || "Not set"} · Room{" "}
+                      {member.assigned_classroom || "Not set"} ·{" "}
+                      {member.surname_from || "?"} to {member.surname_to || "?"}
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => openEditForm(member)}
+                      className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => deleteMember(member)}
+                      className="rounded-2xl border border-red-200 px-4 py-3 text-sm font-black text-red-700 hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))}
+
+              {filteredMembers.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  No team members found.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1060px] text-left text-sm">
                 <thead>
-                  <tr className="border-b bg-slate-50 text-slate-600">
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Email</th>
-                    <th className="p-3">Phone</th>
-                    <th className="p-3">Zone</th>
-                    <th className="p-3">Role</th>
-                    <th className="p-3">Scrutineer Assignment</th>
-                    <th className="p-3">Actions</th>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="py-3 pr-3 font-black">Name</th>
+                    <th className="px-3 py-3 font-black">Email</th>
+                    <th className="px-3 py-3 font-black">Phone</th>
+                    <th className="px-3 py-3 font-black">Role</th>
+                    <th className="px-3 py-3 font-black">Zone</th>
+                    <th className="px-3 py-3 font-black">Scrutineer Assignment</th>
+                    <th className="px-3 py-3 font-black">Actions</th>
                   </tr>
                 </thead>
 
-                <tbody>
-                  {filteredTeam.map((member) => (
-                    <tr key={member.id} className="border-b align-top">
-                      <td className="p-3 font-semibold text-slate-900">
-                        {member.full_name}
+                <tbody className="divide-y divide-slate-100">
+                  {filteredMembers.map((member) => (
+                    <tr key={member.id} className="align-top">
+                      <td className="py-3 pr-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-xs font-black text-white">
+                            {initials(member.full_name)}
+                          </div>
+
+                          <p className="font-black text-slate-950">
+                            {member.full_name}
+                          </p>
+                        </div>
                       </td>
 
-                      <td className="p-3 text-slate-700">
+                      <td className="px-3 py-3 font-semibold text-slate-700">
                         {member.email || "No email"}
                       </td>
 
-                      <td className="p-3 text-slate-700">
+                      <td className="px-3 py-3 font-semibold text-slate-700">
                         {member.phone || "No phone"}
                       </td>
 
-                      <td className="p-3 text-slate-700">
-                        {member.zone || "No zone"}
-                      </td>
-
-                      <td className="p-3">
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {member.role || "No role"}
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${rolePillClass(
+                            member.role
+                          )}`}
+                        >
+                          {member.role || "No Role"}
                         </span>
                       </td>
 
-                      <td className="p-3 text-slate-700">
+                      <td className="px-3 py-3 font-semibold text-slate-700">
+                        {member.zone || "No zone"}
+                      </td>
+
+                      <td className="px-3 py-3 font-semibold text-slate-700">
                         {member.role === "Scrutineer" ? (
-                          <div className="space-y-1">
-                            <p>
-                              <span className="font-semibold">Polling:</span>{" "}
-                              {member.assigned_polling_area || "Not assigned"}
-                            </p>
-
-                            <p>
-                              <span className="font-semibold">Classroom:</span>{" "}
-                              {member.assigned_classroom || "Not assigned"}
-                            </p>
-
-                            <p>
-                              <span className="font-semibold">Surname:</span>{" "}
-                              {member.surname_from || "?"} –{" "}
-                              {member.surname_to || "?"}
-                            </p>
-                          </div>
+                          <span>
+                            Polling {member.assigned_polling_area || "Not set"} ·
+                            Room {member.assigned_classroom || "Not set"} ·{" "}
+                            {member.surname_from || "?"} to{" "}
+                            {member.surname_to || "?"}
+                          </span>
                         ) : (
-                          <span className="text-slate-400">Not applicable</span>
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
 
-                      <td className="p-3">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="px-3 py-3">
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => startEdit(member)}
-                            className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"
+                            onClick={() => openEditForm(member)}
+                            className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white hover:bg-blue-800"
                           >
                             Edit
                           </button>
 
                           <button
                             onClick={() => deleteMember(member)}
-                            className="rounded-lg border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                            className="rounded-xl border border-red-200 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50"
                           >
                             Delete
                           </button>
@@ -764,12 +833,9 @@ Surname To: ${form.surname_to || "blank"}`;
                     </tr>
                   ))}
 
-                  {filteredTeam.length === 0 && (
+                  {filteredMembers.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={7}
-                        className="p-8 text-center text-slate-500"
-                      >
+                      <td colSpan={7} className="p-10 text-center text-slate-500">
                         No team members found.
                       </td>
                     </tr>
@@ -778,8 +844,183 @@ Surname To: ${form.surname_to || "blank"}`;
               </table>
             </div>
           </section>
+
+          {showForm && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+              <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-3xl sm:rounded-3xl sm:p-6">
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900">
+                      {editingMember ? "Edit Team Member" : "Add Team Member"}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Match the email with the user's Supabase Auth login.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={closeForm}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-800"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <FieldLabel>Full Name</FieldLabel>
+                      <TextInput
+                        value={form.full_name}
+                        onChange={(value) => updateForm("full_name", value)}
+                        placeholder="Full name"
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>Email Login</FieldLabel>
+                      <TextInput
+                        type="email"
+                        value={form.email}
+                        onChange={(value) => updateForm("email", value)}
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <FieldLabel>Phone</FieldLabel>
+                      <TextInput
+                        value={form.phone}
+                        onChange={(value) => updateForm("phone", value)}
+                        placeholder="Phone"
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>Role</FieldLabel>
+                      <SelectInput
+                        value={form.role}
+                        onChange={(value) => updateForm("role", value)}
+                      >
+                        {roleOptions.map((role) => (
+                          <option key={role}>{role}</option>
+                        ))}
+                      </SelectInput>
+                    </div>
+
+                    <div>
+                      <FieldLabel>Zone</FieldLabel>
+                      <SelectInput
+                        value={form.zone}
+                        onChange={(value) => updateForm("zone", value)}
+                      >
+                        <option value="">No zone</option>
+                        {zoneOptions.map((zone) => (
+                          <option key={zone} value={zone}>
+                            {zone}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </div>
+                  </div>
+
+                  {form.role === "Scrutineer" && (
+                    <div className="rounded-3xl border border-red-100 bg-red-50 p-4">
+                      <h3 className="text-lg font-black text-red-900">
+                        Scrutineer Assignment
+                      </h3>
+                      <p className="mt-1 text-sm font-semibold text-red-700">
+                        Scrutineers must have a polling area, classroom and
+                        surname range.
+                      </p>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-4">
+                        <div>
+                          <FieldLabel>Polling Area</FieldLabel>
+                          <SelectInput
+                            value={form.assigned_polling_area}
+                            onChange={(value) =>
+                              updateForm("assigned_polling_area", value)
+                            }
+                          >
+                            <option value="">Select polling area</option>
+                            {pollingAreas.map((area) => (
+                              <option key={area.id} value={area.code}>
+                                {pollingAreaLabel(area.code)}
+                              </option>
+                            ))}
+                          </SelectInput>
+                        </div>
+
+                        <div>
+                          <FieldLabel>Classroom</FieldLabel>
+                          <TextInput
+                            value={form.assigned_classroom}
+                            onChange={(value) =>
+                              updateForm("assigned_classroom", value)
+                            }
+                            placeholder="Room 1"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Surname From</FieldLabel>
+                          <TextInput
+                            value={form.surname_from}
+                            onChange={(value) =>
+                              updateForm("surname_from", value.toUpperCase())
+                            }
+                            placeholder="A"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Surname To</FieldLabel>
+                          <TextInput
+                            value={form.surname_to}
+                            onChange={(value) =>
+                              updateForm("surname_to", value.toUpperCase())
+                            }
+                            placeholder="F"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                  This page creates or updates the team profile only. The user
+                  still needs a matching Supabase Auth account/password to log in.
+                </div>
+
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  <button
+                    onClick={closeForm}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 font-black text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={saveMember}
+                    disabled={saving}
+                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  >
+                    {saving
+                      ? "Saving..."
+                      : editingMember
+                      ? "Save Changes"
+                      : "Add Team Member"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
     </main>
   );
 }

@@ -1,240 +1,587 @@
 "use client";
 
-import { useState } from "react";
-import Papa from "papaparse";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type CsvVoterRow = {
-  voter_reg_no?: string;
-  reg_date?: string;
-  first_name?: string;
-  middle_name?: string;
-  last_name?: string;
-  dob?: string;
-  age?: string;
-  vocation?: string;
-  street_name?: string;
-  zone?: string;
-  polling_area?: string;
-  contact_no?: string;
-  support_status?: string;
-  campaigner_assigned?: string;
-  pickup_needed?: string;
-  notes?: string;
-};
+const REQUIRED_COLUMNS = ["voter_reg_no", "first_name", "last_name"];
+const RECOMMENDED_COLUMNS = [
+  "voter_reg_no",
+  "reg_date",
+  "first_name",
+  "middle_name",
+  "last_name",
+  "dob",
+  "age",
+  "vocation",
+  "street_name",
+  "zone",
+  "polling_area",
+  "contact_no",
+  "support_status",
+  "campaigner_assigned",
+  "pickup_needed",
+  "notes",
+];
 
-type PreviewRow = {
-  voter_reg_no: string | null;
-  reg_date: string | null;
-  first_name: string;
-  middle_name: string | null;
-  last_name: string;
-  dob: string | null;
-  age: number | null;
-  vocation: string | null;
-  street_name: string | null;
-  zone: string | null;
-  polling_area: string | null;
-  contact_no: string | null;
-  support_status: string;
-  campaigner_assigned: string | null;
-  pickup_needed: boolean;
-  notes: string | null;
+const BATCH_SIZE = 400;
+
+type TeamProfile = {
+  id: string;
   full_name: string;
+  email: string | null;
+  role: string | null;
+  zone: string | null;
 };
 
 type Campaigner = {
   id: string;
   full_name: string;
+  email: string | null;
+  phone: string | null;
+  zone: string | null;
+  role: string | null;
 };
 
-export default function UploadVotersPage() {
-  const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [uploading, setUploading] = useState(false);
+type CampaignZone = {
+  id: string;
+  name: string;
+  description: string | null;
+  display_order: number | null;
+};
+
+type PollingArea = {
+  id: string;
+  code: string;
+  name: string | null;
+  location: string | null;
+  display_order: number | null;
+};
+
+type SupportStatusOption = {
+  id: string;
+  value: string;
+  label: string;
+  description: string | null;
+  color: string | null;
+  display_order: number | null;
+  is_active: boolean | null;
+};
+
+type ParsedRow = Record<string, string>;
+
+type PreviewRow = {
+  rowNumber: number;
+  voter_reg_no: string;
+  full_name: string;
+  zone: string;
+  polling_area: string;
+  contact_no: string;
+  support_status: string;
+  campaigner_assigned: string;
+  status: "Ready" | "Warning" | "Error";
+  messages: string[];
+  payload: VoterUploadPayload | null;
+};
+
+type VoterUploadPayload = {
+  voter_reg_no: string;
+  voter_number: string;
+  reg_date: string | null;
+  first_name: string | null;
+  middle_name: string | null;
+  last_name: string | null;
+  full_name: string;
+  dob: string | null;
+  age: number | null;
+  vocation: string | null;
+  street_name: string | null;
+  address: string | null;
+  zone: string | null;
+  polling_area: string | null;
+  polling_station: string | null;
+  contact_no: string | null;
+  phone: string | null;
+  support_status: string;
+  campaigner_id: string | null;
+  pickup_needed: boolean;
+  pickup_status: string;
+  notes: string | null;
+};
+
+function normalizeHeader(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function cleanText(value: string | undefined | null) {
+  return String(value || "").trim();
+}
+
+function normalizeName(value: string | undefined | null) {
+  return cleanText(value).replace(/\s+/g, " ");
+}
+
+function parseBoolean(value: string | undefined | null) {
+  const cleanValue = cleanText(value).toLowerCase();
+
+  return ["yes", "y", "true", "1", "needed", "pickup"].includes(cleanValue);
+}
+
+function parseAge(value: string | undefined | null) {
+  const cleanValue = cleanText(value);
+
+  if (!cleanValue) return null;
+
+  const numberValue = Number(cleanValue);
+
+  if (!Number.isFinite(numberValue)) return null;
+
+  return Math.max(0, Math.round(numberValue));
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value || 0);
+}
+
+function splitCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let insideQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    const nextCharacter = line[index + 1];
+
+    if (character === '"' && insideQuotes && nextCharacter === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      insideQuotes = !insideQuotes;
+      continue;
+    }
+
+    if (character === "," && !insideQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += character;
+  }
+
+  values.push(current.trim());
+
+  return values;
+}
+
+function parseCsv(text: string) {
+  const cleanText = text.replace(/^\uFEFF/, "");
+  const lines = cleanText
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+
+  if (lines.length === 0) {
+    return {
+      headers: [] as string[],
+      rows: [] as ParsedRow[],
+    };
+  }
+
+  const headers = splitCsvLine(lines[0]).map(normalizeHeader);
+  const rows = lines.slice(1).map((line) => {
+    const values = splitCsvLine(line);
+    const row: ParsedRow = {};
+
+    headers.forEach((header, index) => {
+      row[header] = values[index] || "";
+    });
+
+    return row;
+  });
+
+  return { headers, rows };
+}
+
+function getRowValue(row: ParsedRow, ...keys: string[]) {
+  for (const key of keys) {
+    const value = cleanText(row[normalizeHeader(key)]);
+
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function pillClass(status: "Ready" | "Warning" | "Error") {
+  if (status === "Ready") return "bg-green-100 text-green-800";
+  if (status === "Warning") return "bg-amber-100 text-amber-800";
+
+  return "bg-red-100 text-red-800";
+}
+
+function supportPillClass(value: string | null) {
+  if (value === "Confirmed Supporter") return "bg-green-100 text-green-800";
+  if (value === "Leaning Supporter") return "bg-purple-100 text-purple-800";
+  if (value === "Undecided") return "bg-amber-100 text-amber-800";
+  if (value === "Not Supporting" || value === "Do Not Contact") {
+    return "bg-red-100 text-red-800";
+  }
+
+  return "bg-slate-100 text-slate-700";
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+  tone = "slate",
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  tone?: "blue" | "green" | "red" | "amber" | "purple" | "slate";
+}) {
+  const color =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
+      : tone === "green"
+      ? "border-green-100 bg-green-50 text-green-700"
+      : tone === "red"
+      ? "border-red-100 bg-red-50 text-red-700"
+      : tone === "amber"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : tone === "purple"
+      ? "border-purple-100 bg-purple-50 text-purple-700"
+      : "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <div className={`rounded-3xl border p-4 shadow-sm ${color}`}>
+      <p className="text-xs font-black uppercase tracking-wide opacity-65">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
+      {detail && <p className="mt-1 text-xs font-semibold opacity-70">{detail}</p>}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
+  );
+}
+
+export default function UploadPage() {
+  const [profile, setProfile] = useState<TeamProfile | null>(null);
+  const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
+  const [campaignZones, setCampaignZones] = useState<CampaignZone[]>([]);
+  const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
+  const [supportStatusOptions, setSupportStatusOptions] = useState<
+    SupportStatusOption[]
+  >([]);
+
+  const [loading, setLoading] = useState(true);
+  const [fileName, setFileName] = useState("");
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<ParsedRow[]>([]);
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [message, setMessage] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
 
-  function normalizeHeader(header: string) {
-    return header.trim().toLowerCase().replace(/\s+/g, "_").replace(/\./g, "");
+  const [validateAgainstSetup, setValidateAgainstSetup] = useState(true);
+  const [skipWarningRows, setSkipWarningRows] = useState(false);
+
+  const canAccess = profile?.role === "Campaign Manager";
+
+  useEffect(() => {
+    loadPage();
+  }, []);
+
+  async function loadPage() {
+    setLoading(true);
+    setMessage("");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const email = sessionData.session?.user.email;
+
+    if (!email) {
+      setMessage("No login email found.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("campaigners")
+      .select("id, full_name, email, role, zone")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Profile error:", profileError);
+      setMessage("Error loading your team profile.");
+      setLoading(false);
+      return;
+    }
+
+    if (!profileData) {
+      setMessage("No Team Rigo profile found for this login email.");
+      setLoading(false);
+      return;
+    }
+
+    setProfile(profileData);
+
+    const [campaignerResult, zoneResult, pollingResult, supportResult] =
+      await Promise.all([
+        supabase
+          .from("campaigners")
+          .select("id, full_name, email, phone, zone, role")
+          .order("full_name", { ascending: true }),
+
+        supabase
+          .from("campaign_zones")
+          .select("id, name, description, display_order")
+          .order("display_order", { ascending: true })
+          .order("name", { ascending: true }),
+
+        supabase
+          .from("polling_areas")
+          .select("id, code, name, location, display_order")
+          .order("display_order", { ascending: true })
+          .order("code", { ascending: true }),
+
+        supabase
+          .from("support_status_options")
+          .select("id, value, label, description, color, display_order, is_active")
+          .eq("is_active", true)
+          .order("display_order", { ascending: true })
+          .order("label", { ascending: true }),
+      ]);
+
+    if (campaignerResult.error) {
+      console.error("Campaigners error:", campaignerResult.error);
+      setCampaigners([]);
+    } else {
+      setCampaigners(campaignerResult.data || []);
+    }
+
+    if (zoneResult.error) {
+      console.error("Zones error:", zoneResult.error);
+      setCampaignZones([]);
+    } else {
+      setCampaignZones(zoneResult.data || []);
+    }
+
+    if (pollingResult.error) {
+      console.error("Polling areas error:", pollingResult.error);
+      setPollingAreas([]);
+    } else {
+      setPollingAreas(pollingResult.data || []);
+    }
+
+    if (supportResult.error) {
+      console.error("Support status options error:", supportResult.error);
+      setSupportStatusOptions([]);
+    } else {
+      setSupportStatusOptions(supportResult.data || []);
+    }
+
+    setLoading(false);
   }
 
-  function yesNoToBoolean(value?: string) {
-    if (!value) return false;
+  const campaignerMap = useMemo(() => {
+    const map = new Map<string, Campaigner>();
 
-    const cleanValue = value.trim().toLowerCase();
+    campaigners.forEach((campaigner) => {
+      map.set(campaigner.full_name.trim().toLowerCase(), campaigner);
+    });
 
-    return (
-      cleanValue === "yes" ||
-      cleanValue === "y" ||
-      cleanValue === "true" ||
-      cleanValue === "1"
+    return map;
+  }, [campaigners]);
+
+  const zoneSet = useMemo(() => {
+    return new Set(campaignZones.map((zone) => zone.name.trim()).filter(Boolean));
+  }, [campaignZones]);
+
+  const pollingAreaSet = useMemo(() => {
+    return new Set(pollingAreas.map((area) => area.code.trim()).filter(Boolean));
+  }, [pollingAreas]);
+
+  const supportStatusSet = useMemo(() => {
+    const values = supportStatusOptions
+      .filter((item) => item.is_active !== false)
+      .map((item) => item.value);
+
+    return new Set(
+      values.length > 0
+        ? values
+        : [
+            "Unknown",
+            "Confirmed Supporter",
+            "Leaning Supporter",
+            "Undecided",
+            "Not Supporting",
+            "Do Not Contact",
+          ]
     );
+  }, [supportStatusOptions]);
+
+  function getSupportLabel(value: string) {
+    const option = supportStatusOptions.find((item) => item.value === value);
+    return option?.label || value;
   }
 
-  function parseAge(value?: string) {
-    if (!value) return null;
-
-    const parsed = Number(value);
-
-    if (Number.isNaN(parsed)) return null;
-
-    return parsed;
+  function buildPreviewRows(rows: ParsedRow[]) {
+    const builtRows = rows.map((row, index) => buildPreviewRow(row, index + 2));
+    setPreviewRows(builtRows);
   }
 
-  function buildFullName(firstName: string, middleName: string | null, lastName: string) {
-    return [firstName, middleName, lastName]
-      .filter(Boolean)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
+  function buildPreviewRow(row: ParsedRow, rowNumber: number): PreviewRow {
+    const messages: string[] = [];
+
+    const voterRegNo = getRowValue(row, "voter_reg_no", "voter_number", "reg_no");
+    const regDate = getRowValue(row, "reg_date");
+    const firstName = normalizeName(getRowValue(row, "first_name"));
+    const middleName = normalizeName(getRowValue(row, "middle_name"));
+    const lastName = normalizeName(getRowValue(row, "last_name"));
+    const csvFullName = normalizeName(getRowValue(row, "full_name", "name"));
+    const fullName =
+      csvFullName || [firstName, middleName, lastName].filter(Boolean).join(" ");
+
+    const dob = getRowValue(row, "dob", "date_of_birth");
+    const age = parseAge(getRowValue(row, "age"));
+    const vocation = getRowValue(row, "vocation", "occupation");
+    const streetName = getRowValue(row, "street_name", "address", "street");
+    const zone = getRowValue(row, "zone");
+    const pollingArea = getRowValue(row, "polling_area", "polling_station");
+    const contactNo = getRowValue(row, "contact_no", "phone", "telephone");
+    const supportStatus = getRowValue(row, "support_status") || "Unknown";
+    const campaignerAssigned = normalizeName(
+      getRowValue(row, "campaigner_assigned", "campaigner", "assigned_to")
+    );
+    const pickupNeeded = parseBoolean(getRowValue(row, "pickup_needed", "pickup"));
+    const notes = getRowValue(row, "notes", "note");
+
+    let campaignerId: string | null = null;
+
+    if (!voterRegNo) messages.push("Missing voter_reg_no.");
+    if (!firstName && !csvFullName) messages.push("Missing first_name or full_name.");
+    if (!lastName && !csvFullName) messages.push("Missing last_name or full_name.");
+
+    if (validateAgainstSetup) {
+      if (zone && !zoneSet.has(zone)) {
+        messages.push(`Zone "${zone}" is not in Campaign Setup.`);
+      }
+
+      if (pollingArea && !pollingAreaSet.has(pollingArea)) {
+        messages.push(`Polling area "${pollingArea}" is not in Campaign Setup.`);
+      }
+
+      if (supportStatus && !supportStatusSet.has(supportStatus)) {
+        messages.push(`Support status "${supportStatus}" is not active in Campaign Setup.`);
+      }
+    }
+
+    if (campaignerAssigned) {
+      const campaigner = campaignerMap.get(campaignerAssigned.toLowerCase());
+
+      if (campaigner) {
+        campaignerId = campaigner.id;
+      } else {
+        messages.push(`Campaigner "${campaignerAssigned}" was not found.`);
+      }
+    }
+
+    const hasRequiredError =
+      !voterRegNo || (!firstName && !csvFullName) || (!lastName && !csvFullName);
+    const hasSetupError =
+      validateAgainstSetup &&
+      ((zone && !zoneSet.has(zone)) ||
+        (pollingArea && !pollingAreaSet.has(pollingArea)) ||
+        (supportStatus && !supportStatusSet.has(supportStatus)));
+
+    const status: PreviewRow["status"] = hasRequiredError || hasSetupError
+      ? "Error"
+      : messages.length > 0
+      ? "Warning"
+      : "Ready";
+
+    const payload: VoterUploadPayload | null =
+      status === "Error"
+        ? null
+        : {
+            voter_reg_no: voterRegNo,
+            voter_number: voterRegNo,
+            reg_date: regDate || null,
+            first_name: firstName || null,
+            middle_name: middleName || null,
+            last_name: lastName || null,
+            full_name: fullName || "Unnamed voter",
+            dob: dob || null,
+            age,
+            vocation: vocation || null,
+            street_name: streetName || null,
+            address: streetName || null,
+            zone: zone || null,
+            polling_area: pollingArea || null,
+            polling_station: pollingArea || null,
+            contact_no: contactNo || null,
+            phone: contactNo || null,
+            support_status: supportStatus,
+            campaigner_id: campaignerId,
+            pickup_needed: pickupNeeded,
+            pickup_status: pickupNeeded ? "Not Contacted" : "No Pickup Needed",
+            notes: notes || null,
+          };
+
+    return {
+      rowNumber,
+      voter_reg_no: voterRegNo,
+      full_name: fullName || "Unnamed voter",
+      zone,
+      polling_area: pollingArea,
+      contact_no: contactNo,
+      support_status: supportStatus,
+      campaigner_assigned: campaignerAssigned,
+      status,
+      messages,
+      payload,
+    };
   }
 
-  function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+
+    setMessage("");
+    setImportedCount(0);
 
     if (!file) return;
 
-    setMessage("");
+    setFileName(file.name);
 
-    Papa.parse<CsvVoterRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: normalizeHeader,
-      complete: function (results) {
-        const cleanRows: PreviewRow[] = results.data
-          .map((row) => {
-            const firstName = row.first_name?.trim() || "";
-            const middleName = row.middle_name?.trim() || null;
-            const lastName = row.last_name?.trim() || "";
-            const fullName = buildFullName(firstName, middleName, lastName);
+    const text = await file.text();
+    const parsed = parseCsv(text);
 
-            return {
-              voter_reg_no: row.voter_reg_no?.trim() || null,
-              reg_date: row.reg_date?.trim() || null,
-              first_name: firstName,
-              middle_name: middleName,
-              last_name: lastName,
-              dob: row.dob?.trim() || null,
-              age: parseAge(row.age),
-              vocation: row.vocation?.trim() || null,
-              street_name: row.street_name?.trim() || null,
-              zone: row.zone?.trim() || null,
-              polling_area: row.polling_area?.trim() || null,
-              contact_no: row.contact_no?.trim() || null,
-              support_status: row.support_status?.trim() || "Unknown",
-              campaigner_assigned: row.campaigner_assigned?.trim() || null,
-              pickup_needed: yesNoToBoolean(row.pickup_needed),
-              notes: row.notes?.trim() || null,
-              full_name: fullName,
-            };
-          })
-          .filter((row) => row.first_name.length > 0 || row.last_name.length > 0);
-
-        setRows(cleanRows);
-
-        if (cleanRows.length === 0) {
-          setMessage(
-            "No valid voter rows found. Make sure first_name or last_name is included."
-          );
-        } else {
-          setMessage(`${cleanRows.length} voters ready for upload.`);
-        }
-      },
-      error: function (error) {
-        console.error(error);
-        setMessage("Error reading CSV file.");
-      },
-    });
+    setHeaders(parsed.headers);
+    setRawRows(parsed.rows);
+    buildPreviewRows(parsed.rows);
   }
 
-  async function uploadRows() {
-    if (rows.length === 0) {
-      alert("Please select a CSV file first.");
-      return;
-    }
-
-    const confirmed = confirm(
-      `Upload ${rows.length} voters to the Team Rigo database?`
-    );
-
-    if (!confirmed) return;
-
-    setUploading(true);
-    setMessage("Uploading voters...");
-
-    const { data: campaigners, error: campaignerError } = await supabase
-      .from("campaigners")
-      .select("id, full_name");
-
-    if (campaignerError) {
-      console.error(campaignerError);
-      alert("Error loading campaigners.");
-      setUploading(false);
-      return;
-    }
-
-    const campaignerList = (campaigners || []) as Campaigner[];
-
-    const votersToInsert = rows.map((row) => {
-      const matchedCampaigner = campaignerList.find(
-        (campaigner) =>
-          campaigner.full_name.toLowerCase().trim() ===
-          row.campaigner_assigned?.toLowerCase().trim()
-      );
-
-      return {
-        voter_reg_no: row.voter_reg_no,
-        voter_number: row.voter_reg_no,
-        reg_date: row.reg_date,
-        first_name: row.first_name,
-        middle_name: row.middle_name,
-        last_name: row.last_name,
-        full_name: row.full_name,
-        dob: row.dob,
-        age: row.age,
-        vocation: row.vocation,
-        street_name: row.street_name,
-        address: row.street_name,
-        zone: row.zone,
-        polling_area: row.polling_area,
-        polling_station: row.polling_area,
-        contact_no: row.contact_no,
-        phone: row.contact_no,
-        support_status: row.support_status,
-        campaigner_id: matchedCampaigner?.id || null,
-        pickup_needed: row.pickup_needed,
-        pickup_status: row.pickup_needed ? "Not Contacted" : "No Pickup Needed",
-        voted: false,
-        notes: row.notes,
-      };
-    });
-
-    const { error } = await supabase.from("voters").insert(votersToInsert);
-
-    if (error) {
-      console.error(error);
-      alert(
-        "Error uploading voters. Check if any voter_reg_no already exists or if a column is missing."
-      );
-      setMessage("Upload failed. Check the console for details.");
-      setUploading(false);
-      return;
-    }
-
-    setMessage(`${rows.length} voters uploaded successfully.`);
-    setRows([]);
-    setUploading(false);
+  function refreshValidation() {
+    buildPreviewRows(rawRows);
+    setMessage("Validation refreshed.");
   }
 
   function downloadTemplate() {
-    const csvTemplate =
-      "voter_reg_no,reg_date,first_name,middle_name,last_name,dob,age,vocation,street_name,zone,polling_area,contact_no,support_status,campaigner_assigned,pickup_needed,notes\n" +
-      "12345,2024-01-15,Maria,Elena,Lopez,1985-05-20,39,Teacher,Altamira Road,Zone 1,39,6001001,Confirmed Supporter,John Castillo,yes,Needs pickup early\n" +
-      "12346,2024-01-15,Carlos,,Ramirez,1978-09-10,46,Mechanic,Finca Solana,Zone 2,40,6001002,Leaning Supporter,Ana Perez,no,\n";
+    const csv = `${RECOMMENDED_COLUMNS.join(",")}\n`;
 
-    const blob = new Blob([csvTemplate], {
-      type: "text/csv;charset=utf-8;",
-    });
-
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -245,194 +592,412 @@ export default function UploadVotersPage() {
     URL.revokeObjectURL(url);
   }
 
-  return (
-    <main className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
+  async function importReadyRows() {
+    if (!canAccess) return;
 
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
-              Batch Upload Voters
+    const errorCount = previewRows.filter((row) => row.status === "Error").length;
+
+    if (errorCount > 0) {
+      setMessage(`Fix ${errorCount} error row(s) before importing.`);
+      return;
+    }
+
+    const importableRows = previewRows.filter((row) => {
+      if (!row.payload) return false;
+      if (skipWarningRows && row.status === "Warning") return false;
+      return true;
+    });
+
+    if (importableRows.length === 0) {
+      setMessage("There are no ready rows to import.");
+      return;
+    }
+
+    const confirmed = confirm(`Import ${importableRows.length} voter record(s)?`);
+
+    if (!confirmed) return;
+
+    setImporting(true);
+    setMessage("");
+    setImportedCount(0);
+
+    const payloads = importableRows.map((row) => row.payload!) as VoterUploadPayload[];
+
+    for (let index = 0; index < payloads.length; index += BATCH_SIZE) {
+      const batch = payloads.slice(index, index + BATCH_SIZE);
+
+      const { error } = await supabase.from("voters").upsert(batch, {
+        onConflict: "voter_reg_no",
+      });
+
+      if (error) {
+        console.error("Upload import error:", error);
+        setMessage(error.message || "Import failed.");
+        setImporting(false);
+        return;
+      }
+
+      setImportedCount((current) => current + batch.length);
+    }
+
+    setMessage(`Import complete. ${payloads.length} voter record(s) saved.`);
+    setImporting(false);
+  }
+
+  const stats = useMemo(() => {
+    const ready = previewRows.filter((row) => row.status === "Ready").length;
+    const warning = previewRows.filter((row) => row.status === "Warning").length;
+    const error = previewRows.filter((row) => row.status === "Error").length;
+    const importable = previewRows.filter((row) => {
+      if (!row.payload) return false;
+      if (skipWarningRows && row.status === "Warning") return false;
+      return true;
+    }).length;
+
+    return {
+      total: previewRows.length,
+      ready,
+      warning,
+      error,
+      importable,
+    };
+  }, [previewRows, skipWarningRows]);
+
+  const missingColumns = useMemo(() => {
+    return REQUIRED_COLUMNS.filter((column) => !headers.includes(column));
+  }, [headers]);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <h1 className="mt-5 text-xl font-black text-slate-900">
+              Loading upload...
             </h1>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-            <p className="mt-2 text-slate-600">
-              Upload voters from the voter register CSV into the Team Rigo database.
-            </p>
+  if (!canAccess) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
+        <div className="w-full max-w-xl rounded-3xl bg-white p-6 text-center shadow-sm sm:p-8">
+          <h1 className="text-2xl font-black text-slate-900">
+            Campaign Manager Access Only
+          </h1>
+
+          <p className="mt-3 text-slate-600">
+            Uploading voter records is restricted to the Campaign Manager.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen overflow-x-hidden bg-slate-100">
+      <section className="bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+                Upload Voters
+              </h1>
+
+              <p className="mt-2 max-w-3xl text-sm text-slate-500 sm:text-base">
+                Import voter records from CSV. The upload validates zones,
+                polling areas and support fields against Campaign Setup.
+              </p>
+            </div>
+
+            <button
+              onClick={downloadTemplate}
+              className="w-full rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:bg-slate-50 sm:w-auto"
+            >
+              Download Template
+            </button>
           </div>
 
-          <a
-            href="/dashboard"
-            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow hover:bg-slate-50"
-          >
-            Back to Dashboard
-          </a>
+          {message && (
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+              {message}
+            </div>
+          )}
+
+          {missingColumns.length > 0 && headers.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">
+              Missing required column(s): {missingColumns.join(", ")}
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <SummaryCard
+              label="Rows"
+              value={formatNumber(stats.total)}
+              detail={fileName || "No file selected"}
+            />
+            <SummaryCard label="Ready" value={formatNumber(stats.ready)} tone="green" />
+            <SummaryCard
+              label="Warnings"
+              value={formatNumber(stats.warning)}
+              tone="amber"
+            />
+            <SummaryCard label="Errors" value={formatNumber(stats.error)} tone="red" />
+            <SummaryCard
+              label="Importable"
+              value={formatNumber(stats.importable)}
+              tone="blue"
+            />
+            <SummaryCard
+              label="Saved"
+              value={formatNumber(importedCount)}
+              detail={importing ? "Importing..." : "Current import"}
+              tone="purple"
+            />
+          </div>
         </div>
+      </section>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <section className="rounded-2xl bg-white p-6 shadow">
-            <h2 className="text-xl font-bold text-slate-900">
-              Upload CSV File
-            </h2>
+      <section className="px-4 py-5 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-7xl">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr] lg:items-center">
+              <div>
+                <FieldLabel>CSV File</FieldLabel>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleFileChange}
+                  className="mt-2 block w-full rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm font-bold text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-700 file:px-4 file:py-3 file:font-black file:text-white"
+                />
+                <p className="mt-3 text-xs font-semibold text-slate-500">
+                  Required: {REQUIRED_COLUMNS.join(", ")}. Recommended:{" "}
+                  {RECOMMENDED_COLUMNS.join(", ")}.
+                </p>
+              </div>
 
-            <p className="mt-2 text-sm text-slate-500">
-              Your CSV should follow the voter register format. First name or
-              last name is required.
-            </p>
+              <div className="rounded-3xl bg-slate-50 p-4">
+                <h2 className="text-lg font-black text-slate-950">
+                  Import Controls
+                </h2>
 
-            <div className="mt-5 space-y-4">
-              <button
-                onClick={downloadTemplate}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Download CSV Template
-              </button>
+                <label className="mt-4 flex items-start gap-3 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={validateAgainstSetup}
+                    onChange={(event) => {
+                      setValidateAgainstSetup(event.target.checked);
+                      setTimeout(() => buildPreviewRows(rawRows), 0);
+                    }}
+                    className="mt-1 h-5 w-5"
+                  />
+                  Validate zones, polling areas and support fields against
+                  Campaign Setup.
+                </label>
 
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleFileUpload}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-700"
-              />
+                <label className="mt-3 flex items-start gap-3 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={skipWarningRows}
+                    onChange={(event) => setSkipWarningRows(event.target.checked)}
+                    className="mt-1 h-5 w-5"
+                  />
+                  Skip warning rows during import.
+                </label>
 
-              <button
-                onClick={uploadRows}
-                disabled={uploading || rows.length === 0}
-                className="w-full rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-              >
-                {uploading ? "Uploading..." : "Upload Voters"}
-              </button>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={refreshValidation}
+                    disabled={rawRows.length === 0}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Refresh Validation
+                  </button>
 
-              {message && (
-                <div className="rounded-xl bg-slate-50 p-4 text-sm font-medium text-slate-700">
-                  {message}
+                  <button
+                    onClick={importReadyRows}
+                    disabled={
+                      importing ||
+                      stats.importable === 0 ||
+                      stats.error > 0 ||
+                      missingColumns.length > 0
+                    }
+                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  >
+                    {importing ? "Importing..." : "Import Ready Rows"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Upload Preview
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Review issues before saving records.
+                </p>
+              </div>
+
+              {fileName && (
+                <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                  {fileName}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:hidden">
+              {previewRows.slice(0, 100).map((row) => (
+                <article
+                  key={`${row.rowNumber}-${row.voter_reg_no}`}
+                  className="rounded-3xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                        Row {row.rowNumber} · {row.voter_reg_no || "No reg no."}
+                      </p>
+                      <h3 className="mt-1 break-words text-lg font-black text-slate-950">
+                        {row.full_name}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {row.zone || "No zone"} ·{" "}
+                        {row.polling_area || "No polling"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pillClass(
+                        row.status
+                      )}`}
+                    >
+                      {row.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-black ${supportPillClass(
+                        row.support_status
+                      )}`}
+                    >
+                      {getSupportLabel(row.support_status)}
+                    </span>
+
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                      {row.campaigner_assigned || "No campaigner"}
+                    </span>
+                  </div>
+
+                  {row.messages.length > 0 && (
+                    <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-xs font-semibold text-slate-600">
+                      {row.messages.join(" ")}
+                    </div>
+                  )}
+                </article>
+              ))}
+
+              {previewRows.length > 100 && (
+                <div className="rounded-3xl bg-slate-50 p-4 text-center text-sm font-bold text-slate-500">
+                  Showing first 100 preview rows on mobile.
+                </div>
+              )}
+
+              {previewRows.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  Select a CSV file to preview records.
                 </div>
               )}
             </div>
 
-            <div className="mt-6 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-              Upload campaigners first if you want the system to automatically
-              assign voters by campaigner name.
-            </div>
-
-            <div className="mt-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-900">
-              CSV columns: voter_reg_no, reg_date, first_name, middle_name,
-              last_name, dob, age, vocation, street_name, zone, polling_area,
-              contact_no, support_status, campaigner_assigned, pickup_needed,
-              notes.
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow lg:col-span-2">
-            <h2 className="text-xl font-bold text-slate-900">Preview</h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Review the voter records before uploading.
-            </p>
-
-            <div className="mt-5 overflow-x-auto">
-              <table className="w-full min-w-[1300px] border-collapse text-left text-sm">
+            <div className="mt-4 hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1100px] text-left text-sm">
                 <thead>
-                  <tr className="border-b bg-slate-50 text-slate-600">
-                    <th className="p-3">Reg No.</th>
-                    <th className="p-3">Reg Date</th>
-                    <th className="p-3">Name</th>
-                    <th className="p-3">DOB</th>
-                    <th className="p-3">Age</th>
-                    <th className="p-3">Vocation</th>
-                    <th className="p-3">Street</th>
-                    <th className="p-3">Zone</th>
-                    <th className="p-3">Polling Area</th>
-                    <th className="p-3">Contact</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">Campaigner</th>
-                    <th className="p-3">Pickup</th>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="py-3 pr-3 font-black">Row</th>
+                    <th className="px-3 py-3 font-black">Status</th>
+                    <th className="px-3 py-3 font-black">Reg No.</th>
+                    <th className="px-3 py-3 font-black">Name</th>
+                    <th className="px-3 py-3 font-black">Zone</th>
+                    <th className="px-3 py-3 font-black">Polling</th>
+                    <th className="px-3 py-3 font-black">Support</th>
+                    <th className="px-3 py-3 font-black">Campaigner</th>
+                    <th className="px-3 py-3 font-black">Messages</th>
                   </tr>
                 </thead>
 
-                <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={index} className="border-b">
-                      <td className="p-3 text-slate-700">
-                        {row.voter_reg_no || "No reg no."}
+                <tbody className="divide-y divide-slate-100">
+                  {previewRows.slice(0, 500).map((row) => (
+                    <tr key={`${row.rowNumber}-${row.voter_reg_no}`} className="align-top">
+                      <td className="py-3 pr-3 font-black text-slate-900">
+                        {row.rowNumber}
                       </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.reg_date || "No date"}
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${pillClass(
+                            row.status
+                          )}`}
+                        >
+                          {row.status}
+                        </span>
                       </td>
-
-                      <td className="p-3 font-semibold text-slate-900">
+                      <td className="px-3 py-3 font-bold text-slate-700">
+                        {row.voter_reg_no || "—"}
+                      </td>
+                      <td className="px-3 py-3 font-black text-slate-950">
                         {row.full_name}
                       </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.dob || "No DOB"}
+                      <td className="px-3 py-3 text-slate-700">
+                        {row.zone || "—"}
                       </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.age ?? "No age"}
+                      <td className="px-3 py-3 text-slate-700">
+                        {row.polling_area || "—"}
                       </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.vocation || "Not listed"}
+                      <td className="px-3 py-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${supportPillClass(
+                            row.support_status
+                          )}`}
+                        >
+                          {getSupportLabel(row.support_status)}
+                        </span>
                       </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.street_name || "No street"}
+                      <td className="px-3 py-3 text-slate-700">
+                        {row.campaigner_assigned || "—"}
                       </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.zone || "No zone"}
-                      </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.polling_area || "Not listed"}
-                      </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.contact_no || "No contact"}
-                      </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.support_status}
-                      </td>
-
-                      <td className="p-3 text-slate-700">
-                        {row.campaigner_assigned || "Not assigned"}
-                      </td>
-
-                      <td className="p-3">
-                        {row.pickup_needed ? (
-                          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                            Yes
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                            No
-                          </span>
-                        )}
+                      <td className="px-3 py-3 text-xs font-semibold text-slate-500">
+                        {row.messages.length > 0 ? row.messages.join(" ") : "—"}
                       </td>
                     </tr>
                   ))}
 
-                  {rows.length === 0 && (
+                  {previewRows.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={13}
-                        className="p-8 text-center text-slate-500"
-                      >
-                        No CSV uploaded yet.
+                      <td colSpan={9} className="p-10 text-center text-slate-500">
+                        Select a CSV file to preview records.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+
+              {previewRows.length > 500 && (
+                <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-center text-sm font-bold text-slate-500">
+                  Showing first 500 preview rows on desktop. All valid rows will
+                  still import.
+                </div>
+              )}
             </div>
           </section>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

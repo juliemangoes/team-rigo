@@ -42,6 +42,7 @@ type SupportStatusOption = {
   value: string;
   label: string;
   description: string | null;
+  color: string | null;
   display_order: number | null;
   is_active: boolean | null;
 };
@@ -154,6 +155,104 @@ function normalizeVoter(item: RawVoter): Voter {
   };
 }
 
+function pillClass(color: string | null | undefined, value?: string | null) {
+  if (color === "green" || value === "Confirmed Supporter") {
+    return "bg-green-100 text-green-800";
+  }
+
+  if (color === "blue") return "bg-blue-100 text-blue-800";
+  if (color === "purple" || value === "Leaning Supporter") {
+    return "bg-purple-100 text-purple-800";
+  }
+
+  if (color === "amber" || value === "Undecided") {
+    return "bg-amber-100 text-amber-800";
+  }
+
+  if (color === "orange") return "bg-orange-100 text-orange-800";
+
+  if (
+    color === "red" ||
+    value === "Not Supporting" ||
+    value === "Do Not Contact"
+  ) {
+    return "bg-red-100 text-red-800";
+  }
+
+  return "bg-slate-100 text-slate-700";
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value || 0);
+}
+
+function compactContact(value: string | null) {
+  return value?.trim() || "";
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+  tone = "slate",
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  tone?: "blue" | "green" | "red" | "amber" | "purple" | "slate";
+}) {
+  const color =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
+      : tone === "green"
+      ? "border-green-100 bg-green-50 text-green-700"
+      : tone === "red"
+      ? "border-red-100 bg-red-50 text-red-700"
+      : tone === "amber"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : tone === "purple"
+      ? "border-purple-100 bg-purple-50 text-purple-700"
+      : "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <div className={`rounded-3xl border p-4 shadow-sm ${color}`}>
+      <p className="text-xs font-black uppercase tracking-wide opacity-65">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
+      {detail && <p className="mt-1 text-xs font-semibold opacity-70">{detail}</p>}
+    </div>
+  );
+}
+
+function SelectField({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+    >
+      {children}
+    </select>
+  );
+}
+
 export default function VotersPage() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
@@ -250,56 +349,59 @@ export default function VotersPage() {
 
     setProfile(profileData);
 
-    const { data: campaignerData, error: campaignerError } = await supabase
-      .from("campaigners")
-      .select("id, full_name, email, phone, zone, role")
-      .order("full_name", { ascending: true });
+    const [campaignerResult, zoneResult, pollingResult, supportResult] =
+      await Promise.all([
+        supabase
+          .from("campaigners")
+          .select("id, full_name, email, phone, zone, role")
+          .order("full_name", { ascending: true }),
 
-    if (campaignerError) {
-      console.error("Campaigners error:", campaignerError);
+        supabase
+          .from("campaign_zones")
+          .select("id, name, description, display_order")
+          .order("display_order", { ascending: true })
+          .order("name", { ascending: true }),
+
+        supabase
+          .from("polling_areas")
+          .select("id, code, name, location, display_order")
+          .order("display_order", { ascending: true })
+          .order("code", { ascending: true }),
+
+        supabase
+          .from("support_status_options")
+          .select("id, value, label, description, color, display_order, is_active")
+          .eq("is_active", true)
+          .order("display_order", { ascending: true })
+          .order("label", { ascending: true }),
+      ]);
+
+    if (campaignerResult.error) {
+      console.error("Campaigners error:", campaignerResult.error);
       setCampaigners([]);
     } else {
-      setCampaigners(campaignerData || []);
+      setCampaigners(campaignerResult.data || []);
     }
 
-    const { data: zoneData, error: zoneError } = await supabase
-      .from("campaign_zones")
-      .select("id, name, description, display_order")
-      .order("display_order", { ascending: true })
-      .order("name", { ascending: true });
-
-    if (zoneError) {
-      console.error("Campaign setup zones error:", zoneError);
+    if (zoneResult.error) {
+      console.error("Campaign setup zones error:", zoneResult.error);
       setCampaignZones([]);
     } else {
-      setCampaignZones(zoneData || []);
+      setCampaignZones(zoneResult.data || []);
     }
 
-    const { data: pollingData, error: pollingError } = await supabase
-      .from("polling_areas")
-      .select("id, code, name, location, display_order")
-      .order("display_order", { ascending: true })
-      .order("code", { ascending: true });
-
-    if (pollingError) {
-      console.error("Campaign setup polling areas error:", pollingError);
+    if (pollingResult.error) {
+      console.error("Campaign setup polling areas error:", pollingResult.error);
       setPollingAreas([]);
     } else {
-      setPollingAreas(pollingData || []);
+      setPollingAreas(pollingResult.data || []);
     }
 
-    const { data: supportData, error: supportError } = await supabase
-      .from("support_status_options")
-      .select("id, value, label, description, display_order, is_active")
-      .eq("is_active", true)
-      .order("display_order", { ascending: true })
-      .order("label", { ascending: true });
-
-    if (supportError) {
-      console.error("Support status options error:", supportError);
+    if (supportResult.error) {
+      console.error("Support status options error:", supportResult.error);
       setSupportStatusOptions([]);
     } else {
-      setSupportStatusOptions(supportData || []);
+      setSupportStatusOptions(supportResult.data || []);
     }
 
     setLoading(false);
@@ -312,7 +414,6 @@ export default function VotersPage() {
     setMessage("");
 
     const cleanSearch = search.trim().replace(/,/g, " ");
-
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
@@ -363,13 +464,8 @@ export default function VotersPage() {
     }
 
     if (pickupFilter !== "All") {
-      if (pickupFilter === "Needed") {
-        query = query.eq("pickup_needed", true);
-      }
-
-      if (pickupFilter === "Not Needed") {
-        query = query.eq("pickup_needed", false);
-      }
+      if (pickupFilter === "Needed") query = query.eq("pickup_needed", true);
+      if (pickupFilter === "Not Needed") query = query.eq("pickup_needed", false);
     }
 
     const { data, error, count } = await query;
@@ -419,9 +515,7 @@ export default function VotersPage() {
   }
 
   function resetToFirstPage() {
-    if (page !== 1) {
-      setPage(1);
-    }
+    if (page !== 1) setPage(1);
   }
 
   function clearFilters() {
@@ -449,9 +543,7 @@ export default function VotersPage() {
       if (voter.zone) zones.add(voter.zone);
     });
 
-    if (profile?.role === "Zone Leader" && profile.zone) {
-      zones.add(profile.zone);
-    }
+    if (profile?.role === "Zone Leader" && profile.zone) zones.add(profile.zone);
 
     return Array.from(zones).sort();
   }, [campaignZones, campaigners, voters, profile]);
@@ -468,16 +560,14 @@ export default function VotersPage() {
       if (voter.polling_station) areas.add(voter.polling_station);
     });
 
-    return Array.from(areas).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    return Array.from(areas).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true })
+    );
   }, [pollingAreas, voters]);
 
-  function getPollingAreaLabel(code: string) {
-    const area = pollingAreas.find((item) => item.code === code);
-
-    if (!area) return code;
-
-    return area.name ? `${area.code} - ${area.name}` : area.code;
-  }
+  const campaignerOptions = useMemo(() => {
+    return campaigners.filter((person) => person.role === "Campaigner");
+  }, [campaigners]);
 
   const supportStatuses = useMemo(() => {
     const activeOptions = supportStatusOptions
@@ -487,11 +577,30 @@ export default function VotersPage() {
     return activeOptions.length > 0 ? activeOptions : defaultSupportStatuses;
   }, [supportStatusOptions]);
 
+  function getPollingAreaLabel(code: string) {
+    const area = pollingAreas.find((item) => item.code === code);
+    if (!area) return code;
+
+    return area.name ? `${area.code} - ${area.name}` : area.code;
+  }
+
+  function getSupportStatusOption(value: string | null) {
+    const cleanValue = value || "Unknown";
+    return supportStatusOptions.find((item) => item.value === cleanValue);
+  }
+
   function getSupportStatusLabel(value: string | null) {
     const cleanValue = value || "Unknown";
-    const option = supportStatusOptions.find((item) => item.value === cleanValue);
+    const option = getSupportStatusOption(cleanValue);
 
     return option?.label || cleanValue;
+  }
+
+  function getSupportPillClass(value: string | null) {
+    const cleanValue = value || "Unknown";
+    const option = getSupportStatusOption(cleanValue);
+
+    return pillClass(option?.color, cleanValue);
   }
 
   const pageStats = useMemo(() => {
@@ -502,6 +611,10 @@ export default function VotersPage() {
       confirmed: voters.filter(
         (voter) => voter.support_status === "Confirmed Supporter"
       ).length,
+      leaning: voters.filter((voter) => voter.support_status === "Leaning Supporter")
+        .length,
+      opponent: voters.filter((voter) => voter.support_status === "Not Supporting")
+        .length,
       pickupNeeded: voters.filter((voter) => voter.pickup_needed).length,
       voted: voters.filter((voter) => voter.voted).length,
     };
@@ -509,10 +622,7 @@ export default function VotersPage() {
 
   function toggleSelected(id: string) {
     setSelectedIds((current) => {
-      if (current.includes(id)) {
-        return current.filter((item) => item !== id);
-      }
-
+      if (current.includes(id)) return current.filter((item) => item !== id);
       return [...current, id];
     });
   }
@@ -536,10 +646,7 @@ export default function VotersPage() {
 
     setMessage("");
 
-    const { error } = await supabase
-      .from("voters")
-      .update(payload)
-      .eq("id", voterId);
+    const { error } = await supabase.from("voters").update(payload).eq("id", voterId);
 
     if (error) {
       console.error("Update voter error:", error);
@@ -606,6 +713,7 @@ export default function VotersPage() {
       polling_station: managePollingArea || null,
       notes: manageNotes.trim() || null,
       pickup_status: managePickupStatus || "Not Contacted",
+      pickup_needed: managePickupStatus !== "No Pickup Needed",
     });
 
     setManageVoter(null);
@@ -613,14 +721,11 @@ export default function VotersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6">
+      <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-2xl bg-white p-8 text-center shadow">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
-
-            <h1 className="mt-3 text-2xl font-bold text-slate-900">
+          <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading voters...
             </h1>
           </div>
@@ -631,18 +736,13 @@ export default function VotersPage() {
 
   if (!canAccess) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
-        <div className="w-full max-w-xl rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-            Team Rigo
-          </p>
-
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">
-            Voter Access Only
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
+        <div className="w-full max-w-xl rounded-3xl bg-white p-6 text-center shadow-sm sm:p-8">
+          <h1 className="text-2xl font-black text-slate-900">
+            Voters Access Restricted
           </h1>
-
           <p className="mt-3 text-slate-600">
-            This page is restricted to the Campaign Manager and Zone Leaders.
+            Only the Campaign Manager and Zone Leaders can view the voter page.
           </p>
         </div>
       </main>
@@ -650,698 +750,761 @@ export default function VotersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
-
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
-              Voters
-            </h1>
-
-            <p className="mt-2 text-slate-600">
-              {profile?.role === "Zone Leader"
-                ? `Zone Leader view. You are seeing voters allowed for your assigned zone: ${
-                    profile.zone || "No zone assigned"
-                  }.`
-                : "Manage voter assignments, support status, pickup details, zones, and polling areas from Campaign Setup."}
-            </p>
-          </div>
-
-          <button
-            onClick={loadVoters}
-            className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-800"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {message && (
-          <div className="mb-6 rounded-xl bg-blue-50 p-4 text-sm font-medium text-blue-900">
-            {message}
-          </div>
-        )}
-
-        {!canManage && (
-          <div className="mb-6 rounded-xl bg-amber-50 p-4 text-sm font-medium text-amber-900">
-            View-only access. Only the Campaign Manager can update assignments
-            or voter records.
-          </div>
-        )}
-
-        <div className="mb-6 grid gap-4 md:grid-cols-6">
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Total Found</p>
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              {totalCount}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Loaded Page</p>
-            <h2 className="mt-2 text-3xl font-bold text-blue-700">
-              {pageStats.loaded}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Assigned</p>
-            <h2 className="mt-2 text-3xl font-bold text-green-700">
-              {pageStats.assigned}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Unassigned</p>
-            <h2 className="mt-2 text-3xl font-bold text-red-700">
-              {pageStats.unassigned}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Pickup Needed</p>
-            <h2 className="mt-2 text-3xl font-bold text-amber-700">
-              {pageStats.pickupNeeded}
-            </h2>
-          </div>
-
-          <div className="rounded-2xl bg-white p-5 shadow">
-            <p className="text-sm text-slate-500">Voted</p>
-            <h2 className="mt-2 text-3xl font-bold text-purple-700">
-              {pageStats.voted}
-            </h2>
-          </div>
-        </div>
-
-        <section className="mb-6 rounded-2xl bg-white p-6 shadow">
-          <div className="grid gap-4 md:grid-cols-6">
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium text-slate-700">
-                Search
-              </label>
-
-              <input
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  resetToFirstPage();
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                placeholder="Name, reg no., phone, street..."
-              />
-            </div>
-
+    <main className="min-h-screen overflow-x-hidden bg-slate-100">
+      <section className="bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <label className="text-sm font-medium text-slate-700">
-                Zone
-              </label>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+                Voters
+              </h1>
 
-              <select
-                value={zoneFilter}
-                onChange={(event) => {
-                  setZoneFilter(event.target.value);
-                  resetToFirstPage();
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option>All</option>
-                {zoneOptions.map((zone) => (
-                  <option key={zone}>{zone}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Polling Area
-              </label>
-
-              <select
-                value={pollingAreaFilter}
-                onChange={(event) => {
-                  setPollingAreaFilter(event.target.value);
-                  resetToFirstPage();
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option>All</option>
-                {pollingAreaOptions.map((area) => (
-                  <option key={area} value={area}>
-                    {getPollingAreaLabel(area)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Support
-              </label>
-
-              <select
-                value={supportFilter}
-                onChange={(event) => {
-                  setSupportFilter(event.target.value);
-                  resetToFirstPage();
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option>All</option>
-                {supportStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {getSupportStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Pickup
-              </label>
-
-              <select
-                value={pickupFilter}
-                onChange={(event) => {
-                  setPickupFilter(event.target.value);
-                  resetToFirstPage();
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option>All</option>
-                <option>Needed</option>
-                <option>Not Needed</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Campaigner
-              </label>
-
-              <select
-                value={campaignerFilter}
-                onChange={(event) => {
-                  setCampaignerFilter(event.target.value);
-                  resetToFirstPage();
-                }}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option value="All">All</option>
-                <option value="Unassigned">Unassigned</option>
-                {campaigners.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.full_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={clearFilters}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Clear Filters
-              </button>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={loadVoters}
-                disabled={loadingVoters}
-                className="w-full rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
-              >
-                {loadingVoters ? "Loading..." : "Apply / Refresh"}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {canManage && (
-          <section className="mb-6 rounded-2xl bg-white p-6 shadow">
-            <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  Bulk Actions
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Selected voters: {selectedIds.length}
-                </p>
-              </div>
-
-              <button
-                onClick={toggleSelectVisible}
-                className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                {selectedIds.length === voters.length && voters.length > 0
-                  ? "Unselect Visible"
-                  : "Select Visible"}
-              </button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-4">
-              <select
-                value={bulkCampaignerId}
-                onChange={(event) => setBulkCampaignerId(event.target.value)}
-                className="rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option value="">Assign Campaigner</option>
-                {campaigners.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.full_name}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => {
-                  if (!bulkCampaignerId) {
-                    alert("Choose a campaigner first.");
-                    return;
-                  }
-
-                  bulkUpdate({
-                    campaigner_id: bulkCampaignerId,
-                  });
-                }}
-                className="rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800"
-              >
-                Apply Campaigner
-              </button>
-
-              <select
-                value={bulkSupportStatus}
-                onChange={(event) => setBulkSupportStatus(event.target.value)}
-                className="rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-              >
-                <option value="">Set Support Status</option>
-                {supportStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {getSupportStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => {
-                  if (!bulkSupportStatus) {
-                    alert("Choose a support status first.");
-                    return;
-                  }
-
-                  bulkUpdate({
-                    support_status: bulkSupportStatus,
-                  });
-                }}
-                className="rounded-xl bg-green-700 px-4 py-3 font-semibold text-white hover:bg-green-800"
-              >
-                Apply Support
-              </button>
-
-              <button
-                onClick={() =>
-                  bulkUpdate({
-                    pickup_needed: true,
-                  })
-                }
-                className="rounded-xl bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700"
-              >
-                Mark Pickup Needed
-              </button>
-
-              <button
-                onClick={() =>
-                  bulkUpdate({
-                    pickup_needed: false,
-                    pickup_status: "No Pickup Needed",
-                  })
-                }
-                className="rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                No Pickup Needed
-              </button>
-            </div>
-          </section>
-        )}
-
-        <section className="rounded-2xl bg-white shadow">
-          <div className="flex flex-col gap-3 border-b p-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">
-                Voter Register
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Page {page} of {totalPages} · Showing {voters.length} of{" "}
-                {totalCount}
+              <p className="mt-2 max-w-3xl text-sm text-slate-500 sm:text-base">
+                {profile?.role === "Zone Leader"
+                  ? `Zone Leader view for ${
+                      profile.zone || "your assigned zone"
+                    }.`
+                  : "Search, classify, assign, and manage voter records."}
               </p>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page <= 1}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Previous
-              </button>
-
-              <button
-                onClick={() =>
-                  setPage((current) => Math.min(totalPages, current + 1))
-                }
-                disabled={page >= totalPages}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
+            <button
+              onClick={loadVoters}
+              className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 sm:w-auto"
+            >
+              {loadingVoters ? "Refreshing..." : "Refresh"}
+            </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1250px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50 text-slate-600">
-                  {canManage && <th className="p-3">Select</th>}
-                  <th className="p-3">Reg No.</th>
-                  <th className="p-3">Name</th>
-                  <th className="p-3">Age / DOB</th>
-                  <th className="p-3">Contact</th>
-                  <th className="p-3">Street</th>
-                  <th className="p-3">Zone</th>
-                  <th className="p-3">Polling</th>
-                  <th className="p-3">Support</th>
-                  <th className="p-3">Campaigner</th>
-                  <th className="p-3">Pickup</th>
-                  <th className="p-3">Voted</th>
-                  {canManage && <th className="p-3">Manage</th>}
-                </tr>
-              </thead>
+          {message && (
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+              {message}
+            </div>
+          )}
 
-              <tbody>
-                {voters.map((voter) => (
-                  <tr key={voter.id} className="border-b align-top">
-                    {canManage && (
-                      <td className="p-3">
+          {!canManage && (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+              View-only access. Only the Campaign Manager can update voter records.
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <SummaryCard label="Total Found" value={formatNumber(totalCount)} />
+            <SummaryCard
+              label="Loaded"
+              value={formatNumber(pageStats.loaded)}
+              detail={`Page ${page} of ${totalPages}`}
+              tone="blue"
+            />
+            <SummaryCard
+              label="Confirmed"
+              value={formatNumber(pageStats.confirmed)}
+              detail={`${formatNumber(pageStats.leaning)} leaning`}
+              tone="green"
+            />
+            <SummaryCard
+              label="Opponent"
+              value={formatNumber(pageStats.opponent)}
+              detail="Not Supporting"
+              tone="red"
+            />
+            <SummaryCard
+              label="Unassigned"
+              value={formatNumber(pageStats.unassigned)}
+              detail="No campaigner"
+              tone={pageStats.unassigned > 0 ? "amber" : "green"}
+            />
+            <SummaryCard
+              label="Pickup"
+              value={formatNumber(pageStats.pickupNeeded)}
+              detail="Needed"
+              tone="purple"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 py-5 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-7xl">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="grid gap-3 lg:grid-cols-[1.5fr_repeat(5,1fr)_auto] lg:items-end">
+              <div>
+                <FieldLabel>Search</FieldLabel>
+                <input
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    resetToFirstPage();
+                  }}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Name, reg no., phone, street..."
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Zone</FieldLabel>
+                <SelectField
+                  value={zoneFilter}
+                  onChange={(value) => {
+                    setZoneFilter(value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option>All</option>
+                  {zoneOptions.map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zone}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+
+              <div>
+                <FieldLabel>Polling</FieldLabel>
+                <SelectField
+                  value={pollingAreaFilter}
+                  onChange={(value) => {
+                    setPollingAreaFilter(value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option>All</option>
+                  {pollingAreaOptions.map((area) => (
+                    <option key={area} value={area}>
+                      {getPollingAreaLabel(area)}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+
+              <div>
+                <FieldLabel>Support</FieldLabel>
+                <SelectField
+                  value={supportFilter}
+                  onChange={(value) => {
+                    setSupportFilter(value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option>All</option>
+                  {supportStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {getSupportStatusLabel(status)}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+
+              <div>
+                <FieldLabel>Campaigner</FieldLabel>
+                <SelectField
+                  value={campaignerFilter}
+                  onChange={(value) => {
+                    setCampaignerFilter(value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option>All</option>
+                  <option value="Unassigned">Unassigned</option>
+                  {campaignerOptions.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.full_name}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+
+              <div>
+                <FieldLabel>Pickup</FieldLabel>
+                <SelectField
+                  value={pickupFilter}
+                  onChange={(value) => {
+                    setPickupFilter(value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option>All</option>
+                  <option>Needed</option>
+                  <option>Not Needed</option>
+                </SelectField>
+              </div>
+
+              <button
+                onClick={clearFilters}
+                className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            </div>
+          </section>
+
+          {canManage && (
+            <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-slate-950">
+                    Bulk Actions
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedIds.length} selected on this page.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-[auto_1fr_auto_1fr_auto] xl:min-w-[820px]">
+                  <button
+                    onClick={toggleSelectVisible}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                  >
+                    {selectedIds.length === voters.length && voters.length > 0
+                      ? "Clear Selection"
+                      : "Select Visible"}
+                  </button>
+
+                  <SelectField
+                    value={bulkCampaignerId}
+                    onChange={setBulkCampaignerId}
+                  >
+                    <option value="">Assign Campaigner</option>
+                    {campaignerOptions.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.full_name}
+                      </option>
+                    ))}
+                  </SelectField>
+
+                  <button
+                    onClick={() => {
+                      if (!bulkCampaignerId) {
+                        alert("Choose a campaigner first.");
+                        return;
+                      }
+
+                      bulkUpdate({ campaigner_id: bulkCampaignerId });
+                    }}
+                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                  >
+                    Apply
+                  </button>
+
+                  <SelectField
+                    value={bulkSupportStatus}
+                    onChange={setBulkSupportStatus}
+                  >
+                    <option value="">Set Support</option>
+                    {supportStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {getSupportStatusLabel(status)}
+                      </option>
+                    ))}
+                  </SelectField>
+
+                  <button
+                    onClick={() => {
+                      if (!bulkSupportStatus) {
+                        alert("Choose a support status first.");
+                        return;
+                      }
+
+                      bulkUpdate({ support_status: bulkSupportStatus });
+                    }}
+                    className="rounded-2xl bg-green-700 px-4 py-3 text-sm font-black text-white hover:bg-green-800"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Voter Records
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Showing {formatNumber(voters.length)} of{" "}
+                  {formatNumber(totalCount)} result(s).
+                </p>
+              </div>
+
+              {loadingVoters && (
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                  Loading...
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:hidden">
+              {voters.map((voter) => {
+                const contact = compactContact(voter.contact_no || voter.phone);
+                const isSelected = selectedIds.includes(voter.id);
+
+                return (
+                  <article
+                    key={voter.id}
+                    className={`rounded-3xl border p-4 ${
+                      isSelected
+                        ? "border-blue-300 bg-blue-50"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                          {getRegNo(voter)}
+                        </p>
+                        <h3 className="mt-1 break-words text-lg font-black text-slate-950">
+                          {getDisplayName(voter)}
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {voter.street_name || voter.address || "No street"}
+                        </p>
+                      </div>
+
+                      {canManage && (
                         <input
                           type="checkbox"
-                          checked={selectedIds.includes(voter.id)}
+                          checked={isSelected}
                           onChange={() => toggleSelected(voter.id)}
-                          className="h-5 w-5"
+                          className="mt-1 h-5 w-5 shrink-0"
                         />
-                      </td>
-                    )}
+                      )}
+                    </div>
 
-                    <td className="p-3 font-bold text-slate-900">
-                      {getRegNo(voter)}
-                    </td>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black ${getSupportPillClass(
+                          voter.support_status
+                        )}`}
+                      >
+                        {getSupportStatusLabel(voter.support_status)}
+                      </span>
 
-                    <td className="p-3">
-                      <p className="font-bold text-slate-900">
-                        {getDisplayName(voter)}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {voter.vocation || "No vocation"}
-                      </p>
-                    </td>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black ${
+                          voter.voted
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {voter.voted ? "Voted" : "Not Voted"}
+                      </span>
 
-                    <td className="p-3 text-slate-700">
-                      <p>Age: {voter.age ?? "No age"}</p>
-                      <p className="text-xs text-slate-500">
-                        DOB: {voter.dob || "No DOB"}
-                      </p>
-                    </td>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black ${
+                          voter.pickup_needed
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {voter.pickup_needed ? "Pickup Needed" : "No Pickup"}
+                      </span>
+                    </div>
 
-                    <td className="p-3 text-slate-700">
-                      {voter.contact_no || voter.phone || "No contact"}
-                    </td>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-400">
+                          Zone
+                        </p>
+                        <p className="mt-1 font-bold text-slate-800">
+                          {voter.zone || "No zone"}
+                        </p>
+                      </div>
 
-                    <td className="p-3 text-slate-700">
-                      {voter.street_name || voter.address || "No street"}
-                    </td>
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-400">
+                          Polling
+                        </p>
+                        <p className="mt-1 font-bold text-slate-800">
+                          {voter.polling_area ||
+                            voter.polling_station ||
+                            "No polling"}
+                        </p>
+                      </div>
 
-                    <td className="p-3 text-slate-700">
-                      {voter.zone || "No zone"}
-                    </td>
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-400">
+                          Campaigner
+                        </p>
+                        <p className="mt-1 font-bold text-slate-800">
+                          {voter.campaigners?.full_name || "Unassigned"}
+                        </p>
+                      </div>
 
-                    <td className="p-3 text-slate-700">
-                      {voter.polling_area ||
-                        voter.polling_station ||
-                        "No polling area"}
-                    </td>
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-400">
+                          Contact
+                        </p>
+                        <p className="mt-1 font-bold text-slate-800">
+                          {contact || "No contact"}
+                        </p>
+                      </div>
+                    </div>
 
-                    <td className="p-3">
-                      {canManage ? (
-                        <select
+                    {canManage && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <SelectField
                           value={voter.support_status || "Unknown"}
-                          onChange={(event) =>
-                            updateVoter(voter.id, {
-                              support_status: event.target.value,
-                            })
+                          onChange={(value) =>
+                            updateVoter(voter.id, { support_status: value })
                           }
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900"
                         >
                           {supportStatuses.map((status) => (
                             <option key={status} value={status}>
                               {getSupportStatusLabel(status)}
                             </option>
                           ))}
-                        </select>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {getSupportStatusLabel(voter.support_status)}
-                        </span>
-                      )}
-                    </td>
+                        </SelectField>
 
-                    <td className="p-3">
-                      {canManage ? (
-                        <select
-                          value={voter.campaigner_id || ""}
-                          onChange={(event) =>
-                            updateVoter(voter.id, {
-                              campaigner_id: event.target.value || null,
-                            })
-                          }
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900"
-                        >
-                          <option value="">Unassigned</option>
-                          {campaigners.map((person) => (
-                            <option key={person.id} value={person.id}>
-                              {person.full_name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-slate-700">
-                          {voter.campaigners?.full_name || "Unassigned"}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-3">
-                      {canManage ? (
-                        <label className="flex items-center gap-2 text-sm text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={voter.pickup_needed}
-                            onChange={(event) =>
-                              updateVoter(voter.id, {
-                                pickup_needed: event.target.checked,
-                                pickup_status: event.target.checked
-                                  ? voter.pickup_status || "Not Contacted"
-                                  : "No Pickup Needed",
-                              })
-                            }
-                            className="h-5 w-5"
-                          />
-                          Needed
-                        </label>
-                      ) : (
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            voter.pickup_needed
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {voter.pickup_needed ? "Needed" : "Not Needed"}
-                        </span>
-                      )}
-
-                      <p className="mt-2 text-xs text-slate-500">
-                        {voter.pickup_status || "Not Contacted"}
-                      </p>
-                    </td>
-
-                    <td className="p-3">
-                      {voter.voted ? (
-                        <div>
-                          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
-                            Voted
-                          </span>
-                          {voter.voted_at && (
-                            <p className="mt-2 text-xs text-green-700">
-                              {formatTime(voter.voted_at)}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">
-                          Not Voted
-                        </span>
-                      )}
-                    </td>
-
-                    {canManage && (
-                      <td className="p-3">
                         <button
                           onClick={() => openManageModal(voter)}
-                          className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"
+                          className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
                         >
                           Manage
                         </button>
-                      </td>
+                      </div>
                     )}
+                  </article>
+                );
+              })}
+
+              {voters.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  No voters found.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[1180px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    {canManage && <th className="py-3 pr-3 font-black">Select</th>}
+                    <th className="px-3 py-3 font-black">Voter</th>
+                    <th className="px-3 py-3 font-black">Reg No.</th>
+                    <th className="px-3 py-3 font-black">Address</th>
+                    <th className="px-3 py-3 font-black">Zone</th>
+                    <th className="px-3 py-3 font-black">Polling</th>
+                    <th className="px-3 py-3 font-black">Support</th>
+                    <th className="px-3 py-3 font-black">Campaigner</th>
+                    <th className="px-3 py-3 font-black">Contact</th>
+                    <th className="px-3 py-3 font-black">Pickup</th>
+                    <th className="px-3 py-3 font-black">Voted</th>
+                    {canManage && <th className="px-3 py-3 font-black">Action</th>}
                   </tr>
-                ))}
+                </thead>
 
-                {voters.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={canManage ? 13 : 11}
-                      className="p-10 text-center text-slate-500"
-                    >
-                      No voters found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                <tbody className="divide-y divide-slate-100">
+                  {voters.map((voter) => (
+                    <tr key={voter.id} className="align-top">
+                      {canManage && (
+                        <td className="py-3 pr-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(voter.id)}
+                            onChange={() => toggleSelected(voter.id)}
+                            className="h-5 w-5"
+                          />
+                        </td>
+                      )}
 
-        {manageVoter && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-              <div className="mb-5">
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Manage Voter
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {getDisplayName(manageVoter)} · {getRegNo(manageVoter)}
-                </p>
-              </div>
+                      <td className="px-3 py-3">
+                        <p className="font-black text-slate-950">
+                          {getDisplayName(voter)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {voter.age ? `${voter.age} yrs` : "No age"}
+                          {voter.vocation ? ` · ${voter.vocation}` : ""}
+                        </p>
+                      </td>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-slate-700">
-                    Contact Number
-                  </label>
-                  <input
-                    value={manageContact}
-                    onChange={(event) => setManageContact(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    placeholder="Contact number"
-                  />
-                </div>
+                      <td className="px-3 py-3 font-bold text-slate-700">
+                        {getRegNo(voter)}
+                      </td>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">
-                      Zone
-                    </label>
-                    <select
-                      value={manageZone}
-                      onChange={(event) => setManageZone(event.target.value)}
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    >
-                      <option value="">No zone</option>
-                      {zoneOptions.map((zone) => (
-                        <option key={zone} value={zone}>
-                          {zone}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <td className="px-3 py-3 text-slate-700">
+                        {voter.street_name || voter.address || "No street"}
+                      </td>
 
-                  <div>
-                    <label className="text-sm font-medium text-slate-700">
-                      Polling Area
-                    </label>
-                    <select
-                      value={managePollingArea}
-                      onChange={(event) =>
-                        setManagePollingArea(event.target.value)
-                      }
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    >
-                      <option value="">No polling area</option>
-                      {pollingAreaOptions.map((area) => (
-                        <option key={area} value={area}>
-                          {getPollingAreaLabel(area)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                      <td className="px-3 py-3 text-slate-700">
+                        {voter.zone || "No zone"}
+                      </td>
 
-                <div>
-                  <label className="text-sm font-medium text-slate-700">
-                    Pickup Status
-                  </label>
-                  <select
-                    value={managePickupStatus}
-                    onChange={(event) =>
-                      setManagePickupStatus(event.target.value)
-                    }
-                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  >
-                    {pickupStatuses.map((status) => (
-                      <option key={status}>{status}</option>
-                    ))}
-                  </select>
-                </div>
+                      <td className="px-3 py-3 text-slate-700">
+                        {voter.polling_area ||
+                          voter.polling_station ||
+                          "No polling"}
+                      </td>
 
-                <div>
-                  <label className="text-sm font-medium text-slate-700">
-                    Notes
-                  </label>
-                  <textarea
-                    value={manageNotes}
-                    onChange={(event) => setManageNotes(event.target.value)}
-                    className="mt-2 min-h-28 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    placeholder="Notes"
-                  />
-                </div>
-              </div>
+                      <td className="px-3 py-3">
+                        {canManage ? (
+                          <select
+                            value={voter.support_status || "Unknown"}
+                            onChange={(event) =>
+                              updateVoter(voter.id, {
+                                support_status: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-900"
+                          >
+                            {supportStatuses.map((status) => (
+                              <option key={status} value={status}>
+                                {getSupportStatusLabel(status)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-black ${getSupportPillClass(
+                              voter.support_status
+                            )}`}
+                          >
+                            {getSupportStatusLabel(voter.support_status)}
+                          </span>
+                        )}
+                      </td>
 
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                      <td className="px-3 py-3">
+                        {canManage ? (
+                          <select
+                            value={voter.campaigner_id || ""}
+                            onChange={(event) =>
+                              updateVoter(voter.id, {
+                                campaigner_id: event.target.value || null,
+                              })
+                            }
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-900"
+                          >
+                            <option value="">Unassigned</option>
+                            {campaignerOptions.map((person) => (
+                              <option key={person.id} value={person.id}>
+                                {person.full_name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="font-bold text-slate-700">
+                            {voter.campaigners?.full_name || "Unassigned"}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3 font-bold text-slate-700">
+                        {compactContact(voter.contact_no || voter.phone) || "No contact"}
+                      </td>
+
+                      <td className="px-3 py-3">
+                        {canManage ? (
+                          <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={voter.pickup_needed}
+                              onChange={(event) =>
+                                updateVoter(voter.id, {
+                                  pickup_needed: event.target.checked,
+                                  pickup_status: event.target.checked
+                                    ? voter.pickup_status || "Not Contacted"
+                                    : "No Pickup Needed",
+                                })
+                              }
+                              className="h-5 w-5"
+                            />
+                            Needed
+                          </label>
+                        ) : (
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-black ${
+                              voter.pickup_needed
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {voter.pickup_needed ? "Needed" : "Not Needed"}
+                          </span>
+                        )}
+                        <p className="mt-2 text-xs text-slate-500">
+                          {voter.pickup_status || "Not Contacted"}
+                        </p>
+                      </td>
+
+                      <td className="px-3 py-3">
+                        {voter.voted ? (
+                          <div>
+                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-black text-green-800">
+                              Voted
+                            </span>
+                            {voter.voted_at && (
+                              <p className="mt-2 text-xs font-bold text-green-700">
+                                {formatTime(voter.voted_at)}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-800">
+                            Not Voted
+                          </span>
+                        )}
+                      </td>
+
+                      {canManage && (
+                        <td className="px-3 py-3">
+                          <button
+                            onClick={() => openManageModal(voter)}
+                            className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white hover:bg-blue-800"
+                          >
+                            Manage
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+
+                  {voters.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={canManage ? 12 : 10}
+                        className="p-10 text-center text-slate-500"
+                      >
+                        No voters found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-bold text-slate-500">
+                Page {page} of {totalPages}
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 sm:flex">
                 <button
-                  onClick={() => setManageVoter(null)}
-                  className="rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page <= 1}
+                  className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Cancel
+                  Previous
                 </button>
 
                 <button
-                  onClick={saveManageModal}
-                  className="rounded-xl bg-blue-700 px-4 py-3 font-semibold text-white hover:bg-blue-800"
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  disabled={page >= totalPages}
+                  className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Save Changes
+                  Next
                 </button>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          </section>
+
+          {manageVoter && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+              <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-2xl sm:rounded-3xl sm:p-6">
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900">
+                      Manage Voter
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {getDisplayName(manageVoter)} · {getRegNo(manageVoter)}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setManageVoter(null)}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-800"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid gap-4">
+                  <div>
+                    <FieldLabel>Contact Number</FieldLabel>
+                    <input
+                      value={manageContact}
+                      onChange={(event) => setManageContact(event.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                      placeholder="Contact number"
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <FieldLabel>Zone</FieldLabel>
+                      <SelectField value={manageZone} onChange={setManageZone}>
+                        <option value="">No zone</option>
+                        {zoneOptions.map((zone) => (
+                          <option key={zone} value={zone}>
+                            {zone}
+                          </option>
+                        ))}
+                      </SelectField>
+                    </div>
+
+                    <div>
+                      <FieldLabel>Polling Area</FieldLabel>
+                      <SelectField
+                        value={managePollingArea}
+                        onChange={setManagePollingArea}
+                      >
+                        <option value="">No polling area</option>
+                        {pollingAreaOptions.map((area) => (
+                          <option key={area} value={area}>
+                            {getPollingAreaLabel(area)}
+                          </option>
+                        ))}
+                      </SelectField>
+                    </div>
+                  </div>
+
+                  <div>
+                    <FieldLabel>Pickup Status</FieldLabel>
+                    <SelectField
+                      value={managePickupStatus}
+                      onChange={setManagePickupStatus}
+                    >
+                      {pickupStatuses.map((status) => (
+                        <option key={status}>{status}</option>
+                      ))}
+                    </SelectField>
+                  </div>
+
+                  <div>
+                    <FieldLabel>Notes</FieldLabel>
+                    <textarea
+                      value={manageNotes}
+                      onChange={(event) => setManageNotes(event.target.value)}
+                      className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                      placeholder="Notes"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  <button
+                    onClick={() => setManageVoter(null)}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 font-black text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={saveManageModal}
+                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
