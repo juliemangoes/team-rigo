@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type TeamProfile = {
@@ -15,17 +15,6 @@ type TeamProfile = {
   surname_to: string | null;
 };
 
-type CampaignerRelation =
-  | {
-      id: string;
-      full_name: string;
-    }
-  | {
-      id: string;
-      full_name: string;
-    }[]
-  | null;
-
 type Voter = {
   id: string;
   voter_reg_no: string | null;
@@ -36,28 +25,16 @@ type Voter = {
   full_name: string;
   dob: string | null;
   age: number | null;
-  support_status: string | null;
-  campaigner_id: string | null;
-  pickup_needed: boolean;
-  pickup_status: string | null;
+  street_name: string | null;
+  address: string | null;
+  zone: string | null;
+  polling_area: string | null;
+  polling_station: string | null;
   voted: boolean;
   voted_at: string | null;
-  notes: string | null;
-  campaigners?: {
-    id: string;
-    full_name: string;
-  } | null;
 };
 
-type RawVoter = Omit<Voter, "campaigners"> & {
-  campaigners?: CampaignerRelation;
-};
-
-type Stats = {
-  totalAssigned: number;
-  voted: number;
-  notVoted: number;
-};
+type VotedFilter = "Not Voted" | "Voted" | "All";
 
 const voterSelect = `
   id,
@@ -69,54 +46,171 @@ const voterSelect = `
   full_name,
   dob,
   age,
-  support_status,
-  campaigner_id,
-  pickup_needed,
-  pickup_status,
+  street_name,
+  address,
+  zone,
+  polling_area,
+  polling_station,
   voted,
-  voted_at,
-  notes,
-  campaigners:campaigner_id (
-    id,
-    full_name
-  )
+  voted_at
 `;
 
-export default function ScrutineerPage() {
-  const searchRef = useRef<HTMLInputElement | null>(null);
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value || 0);
+}
 
-  const [profile, setProfile] = useState<TeamProfile | null>(null);
-  const [results, setResults] = useState<Voter[]>([]);
-  const [immediatePastVoter, setImmediatePastVoter] = useState<Voter | null>(
-    null
-  );
+function cleanText(value: string | null | undefined) {
+  return value?.trim() || "";
+}
 
-  const [stats, setStats] = useState<Stats>({
-    totalAssigned: 0,
-    voted: 0,
-    notVoted: 0,
+function getDisplayName(voter: Voter) {
+  const nameFromParts = [
+    voter.first_name,
+    voter.middle_name,
+    voter.last_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return nameFromParts || voter.full_name || "Unnamed voter";
+}
+
+function getRegNo(voter: Voter) {
+  return voter.voter_reg_no || voter.voter_number || "No reg no.";
+}
+
+function getAddress(voter: Voter) {
+  return voter.street_name || voter.address || "";
+}
+
+function getPollingArea(voter: Voter) {
+  return voter.polling_area || voter.polling_station || "";
+}
+
+function formatTime(value: string | null) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
   });
+}
 
-  const [searchInput, setSearchInput] = useState("");
+function formatDateTime(value: string | null) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function initials(name: string | null | undefined) {
+  if (!name) return "TR";
+
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) return "TR";
+
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+}
+
+function percentage(value: number, total: number) {
+  if (!total || total <= 0) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function clamp(value: number, min = 0, max = 100) {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+  tone = "slate",
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  tone?: "sky" | "green" | "red" | "amber" | "purple" | "slate";
+}) {
+  const color =
+    tone === "sky"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
+      : tone === "green"
+      ? "border-green-100 bg-green-50 text-green-700"
+      : tone === "red"
+      ? "border-red-100 bg-red-50 text-red-700"
+      : tone === "amber"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : tone === "purple"
+      ? "border-purple-100 bg-purple-50 text-purple-700"
+      : "border-slate-200 bg-white text-slate-900";
+
+  return (
+    <div className={`rounded-[1.6rem] border p-4 shadow-sm ${color}`}>
+      <p className="text-xs font-black uppercase tracking-wide opacity-65">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
+      {detail && <p className="mt-1 text-xs font-semibold opacity-70">{detail}</p>}
+    </div>
+  );
+}
+
+function ProgressBar({ value, total }: { value: number; total: number }) {
+  const width = clamp(percentage(value, total));
+
+  return (
+    <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+      <div className="h-3 rounded-full bg-sky-500" style={{ width: `${width}%` }} />
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
+  );
+}
+
+export default function ScrutineerPage() {
+  const [profile, setProfile] = useState<TeamProfile | null>(null);
+  const [voters, setVoters] = useState<Voter[]>([]);
+  const [lastMarkedVoter, setLastMarkedVoter] = useState<Voter | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [loadingVoters, setLoadingVoters] = useState(false);
+  const [markingId, setMarkingId] = useState("");
   const [message, setMessage] = useState("");
 
-  const canMarkVoted = profile?.role === "Scrutineer";
+  const [search, setSearch] = useState("");
+  const [votedFilter, setVotedFilter] = useState<VotedFilter>("Not Voted");
+
+  const canAccess = profile?.role === "Scrutineer";
+  const assignmentComplete =
+    !!profile?.assigned_polling_area &&
+    !!profile?.assigned_classroom &&
+    !!profile?.surname_from &&
+    !!profile?.surname_to;
 
   useEffect(() => {
-    loadInitialData();
+    loadPage();
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      searchRef.current?.focus();
-    }
-  }, [loading]);
-
-  async function loadInitialData() {
+  async function loadPage() {
     setLoading(true);
     setMessage("");
 
@@ -161,303 +255,154 @@ export default function ScrutineerPage() {
     }
 
     setProfile(profileData);
-
-    await loadStats();
-
     setLoading(false);
+
+    if (profileData.role === "Scrutineer") {
+      await loadVoters();
+    }
   }
 
-  async function loadStats() {
-    const totalResult = await supabase
-      .from("voters")
-      .select("id", { count: "exact", head: true });
+  async function loadVoters() {
+    setLoadingVoters(true);
+    setMessage("");
 
-    const votedResult = await supabase
-      .from("voters")
-      .select("id", { count: "exact", head: true })
-      .eq("voted", true);
-
-    const notVotedResult = await supabase
-      .from("voters")
-      .select("id", { count: "exact", head: true })
-      .eq("voted", false);
-
-    setStats({
-      totalAssigned: totalResult.count || 0,
-      voted: votedResult.count || 0,
-      notVoted: notVotedResult.count || 0,
-    });
-  }
-
-  function normalizeVoter(item: RawVoter): Voter {
-    return {
-      ...item,
-      campaigners: Array.isArray(item.campaigners)
-        ? item.campaigners[0] || null
-        : item.campaigners || null,
-    };
-  }
-
-  function getDisplayName(voter: Voter) {
-    const nameFromParts = [
-      voter.first_name,
-      voter.middle_name,
-      voter.last_name,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return nameFromParts || voter.full_name || "Unnamed voter";
-  }
-
-  function getRegNo(voter: Voter) {
-    return voter.voter_reg_no || voter.voter_number || "No reg no.";
-  }
-
-  function formatDob(dob: string | null) {
-    if (!dob) return "No DOB";
-
-    return dob;
-  }
-
-  function formatAge(age: number | null) {
-    if (age === null || age === undefined) return "No age";
-
-    return `${age}`;
-  }
-
-  function formatTime(value: string | null) {
-    if (!value) return "";
-
-    return new Date(value).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  async function runExactRegSearch(cleanSearch: string) {
     const { data, error } = await supabase
       .from("voters")
       .select(voterSelect)
-      .eq("voter_reg_no", cleanSearch)
-      .limit(12);
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false })
+      .range(0, 49999);
 
     if (error) {
-      throw error;
+      console.error("Scrutineer voters load error:", error);
+      setMessage(error.message || "Error loading your assigned voter list.");
+      setVoters([]);
+      setLoadingVoters(false);
+      return;
     }
 
-    if (data && data.length > 0) {
-      return ((data || []) as RawVoter[]).map(normalizeVoter);
-    }
-
-    const { data: numberData, error: numberError } = await supabase
-      .from("voters")
-      .select(voterSelect)
-      .eq("voter_number", cleanSearch)
-      .limit(12);
-
-    if (numberError) {
-      throw numberError;
-    }
-
-    return ((numberData || []) as RawVoter[]).map(normalizeVoter);
+    setVoters(data || []);
+    setLoadingVoters(false);
   }
 
-  async function searchVoters(event?: FormEvent) {
-    event?.preventDefault();
+  const stats = useMemo(() => {
+    const total = voters.length;
+    const voted = voters.filter((voter) => voter.voted).length;
+    const notVoted = total - voted;
 
-    const cleanSearch = searchInput.trim().replace(/,/g, " ");
-
-    if (!cleanSearch) {
-      setResults([]);
-      setMessage("Enter a voter registration number, surname, or name.");
-      searchRef.current?.focus();
-      return;
-    }
-
-    setSearching(true);
-    setMessage("");
-
-    try {
-      const exactMatches = await runExactRegSearch(cleanSearch);
-
-      if (exactMatches.length > 0) {
-        setResults(exactMatches);
-        setSearching(false);
-        return;
-      }
-
-      const hasSpace = cleanSearch.includes(" ");
-
-      const searchFields = [
-        `voter_reg_no.ilike.%${cleanSearch}%`,
-        `voter_number.ilike.%${cleanSearch}%`,
-        `last_name.ilike.%${cleanSearch}%`,
-        `first_name.ilike.%${cleanSearch}%`,
-        `middle_name.ilike.%${cleanSearch}%`,
-      ];
-
-      if (hasSpace) {
-        searchFields.push(`full_name.ilike.%${cleanSearch}%`);
-      }
-
-      const { data, error } = await supabase
-        .from("voters")
-        .select(voterSelect)
-        .or(searchFields.join(","))
-        .order("last_name", { ascending: true, nullsFirst: false })
-        .order("first_name", { ascending: true, nullsFirst: false })
-        .limit(12);
-
-      if (error) {
-        throw error;
-      }
-
-      const normalizedResults = ((data || []) as RawVoter[]).map(
-        normalizeVoter
-      );
-
-      setResults(normalizedResults);
-
-      if (normalizedResults.length === 0) {
-        setMessage("No voter found in your assigned classroom list.");
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-      setMessage("Error searching voter.");
-      setResults([]);
-    }
-
-    setSearching(false);
-  }
-
-  async function markAsVoted(voter: Voter) {
-    if (!canMarkVoted) {
-      alert("Only scrutineers can mark voters as voted.");
-      return;
-    }
-
-    if (voter.voted) {
-      alert("This voter is already marked as voted.");
-      return;
-    }
-
-    const confirmed = confirm(`Mark ${getDisplayName(voter)} as voted?`);
-
-    if (!confirmed) return;
-
-    setUpdatingId(voter.id);
-    setMessage("");
-
-    const { error } = await supabase.rpc("set_voter_voted_status", {
-      p_voter_id: voter.id,
-      p_voted: true,
-    });
-
-    if (error) {
-      console.error("Mark voted error:", error);
-      setMessage(error.message || "Error marking voter as voted.");
-      setUpdatingId(null);
-      return;
-    }
-
-    const updatedVoter: Voter = {
-      ...voter,
-      voted: true,
-      voted_at: new Date().toISOString(),
+    return {
+      total,
+      voted,
+      notVoted,
+      progress: percentage(voted, total),
     };
+  }, [voters]);
 
-    setImmediatePastVoter(updatedVoter);
-    setResults([]);
-    setSearchInput("");
-    setMessage(`${getDisplayName(voter)} was marked as voted.`);
+  const filteredVoters = useMemo(() => {
+    const cleanSearch = search.trim().toLowerCase();
 
-    await loadStats();
+    return voters.filter((voter) => {
+      const matchesFilter =
+        votedFilter === "All" ||
+        (votedFilter === "Voted" && voter.voted) ||
+        (votedFilter === "Not Voted" && !voter.voted);
 
-    setUpdatingId(null);
+      const matchesSearch =
+        !cleanSearch ||
+        getRegNo(voter).toLowerCase() === cleanSearch ||
+        getRegNo(voter).toLowerCase().includes(cleanSearch) ||
+        getDisplayName(voter).toLowerCase().includes(cleanSearch) ||
+        cleanText(voter.first_name).toLowerCase().includes(cleanSearch) ||
+        cleanText(voter.middle_name).toLowerCase().includes(cleanSearch) ||
+        cleanText(voter.last_name).toLowerCase().includes(cleanSearch) ||
+        getAddress(voter).toLowerCase().includes(cleanSearch);
 
-    setTimeout(() => {
-      searchRef.current?.focus();
-    }, 100);
-  }
+      return matchesFilter && matchesSearch;
+    });
+  }, [voters, search, votedFilter]);
 
-  async function undoImmediatePast() {
-    if (!immediatePastVoter) return;
+  async function setVotedStatus(voter: Voter, voted: boolean) {
+    if (!canAccess) return;
 
-    const confirmed = confirm(
-      `Undo voted status for ${getDisplayName(immediatePastVoter)}?`
-    );
+    const actionText = voted ? "mark this voter as voted" : "undo this voted mark";
+    const confirmed = confirm(`Are you sure you want to ${actionText}?`);
 
     if (!confirmed) return;
 
-    setUpdatingId(immediatePastVoter.id);
+    setMarkingId(voter.id);
     setMessage("");
 
-    const { error } = await supabase.rpc("set_voter_voted_status", {
-      p_voter_id: immediatePastVoter.id,
-      p_voted: false,
+    const { data, error } = await supabase.rpc("set_voter_voted_status", {
+      p_voter_id: voter.id,
+      p_voted: voted,
     });
 
     if (error) {
-      console.error("Undo voted error:", error);
-      setMessage(error.message || "Error undoing voted status.");
-      setUpdatingId(null);
+      console.error("Set voted status error:", error);
+      setMessage(error.message || "Error updating voted status.");
+      setMarkingId("");
       return;
     }
 
-    setMessage(
-      `Voted status was undone for ${getDisplayName(immediatePastVoter)}.`
+    const updatedVoter = data as Voter;
+
+    setVoters((current) =>
+      current.map((item) =>
+        item.id === voter.id
+          ? {
+              ...item,
+              voted: updatedVoter.voted,
+              voted_at: updatedVoter.voted_at,
+            }
+          : item
+      )
     );
-    setImmediatePastVoter(null);
 
-    await loadStats();
+    setLastMarkedVoter(
+      voted
+        ? {
+            ...voter,
+            voted: updatedVoter.voted,
+            voted_at: updatedVoter.voted_at,
+          }
+        : null
+    );
 
-    setUpdatingId(null);
+    setSearch("");
 
-    setTimeout(() => {
-      searchRef.current?.focus();
-    }, 100);
-  }
+    if (voted) {
+      setMessage(`${getDisplayName(voter)} marked as voted.`);
+    } else {
+      setMessage(`${getDisplayName(voter)} voted mark undone.`);
+    }
 
-  function clearSearch() {
-    setSearchInput("");
-    setResults([]);
-    setMessage("");
-    searchRef.current?.focus();
+    setMarkingId("");
   }
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
-        <div className="rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
-            Team Rigo
-          </p>
-
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">
-            Loading scrutineer station...
-          </h1>
+      <main className="min-h-screen bg-[#eef2f6] p-4 sm:p-6">
+        <div className="mx-auto max-w-5xl">
+          <div className="rounded-[2rem] bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600" />
+            <h1 className="mt-5 text-xl font-black text-slate-900">
+              Loading scrutineer station...
+            </h1>
+          </div>
         </div>
       </main>
     );
   }
 
-  if (!canMarkVoted) {
+  if (!canAccess) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
-        <div className="w-full max-w-xl rounded-2xl bg-white p-8 text-center shadow">
-          <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
-            Team Rigo
-          </p>
-
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">
+      <main className="flex min-h-screen items-center justify-center bg-[#eef2f6] p-4 sm:p-6">
+        <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 text-center shadow-sm sm:p-8">
+          <h1 className="text-2xl font-black text-slate-900">
             Scrutineer Access Only
           </h1>
-
           <p className="mt-3 text-slate-600">
-            This station is only for users assigned the Scrutineer role.
+            This station is restricted to users assigned as Scrutineers.
           </p>
         </div>
       </main>
@@ -465,278 +410,285 @@ export default function ScrutineerPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 grid gap-6 lg:grid-cols-3">
-          <section className="rounded-2xl bg-white p-6 shadow lg:col-span-2">
-            <div className="mb-6">
-              <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
-                Team Rigo
+    <main className="min-h-screen overflow-x-hidden bg-[#eef2f6]">
+      <section className="px-4 py-5 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                Election Day Station
               </p>
-
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">
-                Scrutineer Station
+              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+                Scrutineer
               </h1>
-
-              <p className="mt-2 text-slate-600">
-                Search voters in your assigned classroom list and mark them as
-                voted.
+              <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+                {profile.full_name}
               </p>
             </div>
 
-            <div className="mb-6 rounded-2xl border border-sky-100 bg-sky-50 p-5">
-              <p className="text-sm font-semibold uppercase tracking-wide text-sky-700">
-                Assigned Classroom
-              </p>
+            <button
+              onClick={loadVoters}
+              disabled={loadingVoters}
+              className="shrink-0 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingVoters ? "..." : "Refresh"}
+            </button>
+          </div>
 
-              <div className="mt-3 grid gap-3 md:grid-cols-4">
-                <div>
-                  <p className="text-xs text-sky-700">Polling Area</p>
-                  <p className="text-lg font-bold text-slate-900">
-                    {profile?.assigned_polling_area || "Not assigned"}
-                  </p>
+          {message && (
+            <div className="mb-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
+              {message}
+            </div>
+          )}
+
+          {!assignmentComplete && (
+            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">
+              This scrutineer assignment is incomplete. Add polling area,
+              classroom and surname range in Team Setup.
+            </div>
+          )}
+
+          <section className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 text-white shadow-xl shadow-slate-300 sm:p-7">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-sm font-black text-white">
+                    {initials(profile.full_name)}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-black">
+                      {profile.assigned_classroom || "No Classroom"}
+                    </p>
+                    <p className="truncate text-sm font-semibold text-white/50">
+                      Polling {profile.assigned_polling_area || "Not Set"}
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <p className="text-xs text-sky-700">Classroom</p>
-                  <p className="text-lg font-bold text-slate-900">
-                    {profile?.assigned_classroom || "Not assigned"}
-                  </p>
-                </div>
+                <h2 className="mt-6 text-3xl font-black tracking-tight sm:text-5xl">
+                  {formatNumber(stats.notVoted)} voters left
+                </h2>
 
-                <div>
-                  <p className="text-xs text-sky-700">Surname Range</p>
-                  <p className="text-lg font-bold text-slate-900">
-                    {profile?.surname_from || "?"} – {profile?.surname_to || "?"}
-                  </p>
-                </div>
+                <p className="mt-3 text-sm font-medium leading-6 text-white/60">
+                  Surname range: {profile.surname_from || "?"} to{" "}
+                  {profile.surname_to || "?"}. Mark only when the voter has
+                  appeared and is confirmed as voted.
+                </p>
+              </div>
 
-                <div>
-                  <p className="text-xs text-sky-700">Scrutineer</p>
-                  <p className="text-lg font-bold text-slate-900">
-                    {profile?.full_name}
-                  </p>
-                </div>
+              <div className="rounded-[1.5rem] bg-white/10 p-4 ring-1 ring-white/10">
+                <p className="text-xs font-black uppercase tracking-wide text-white/50">
+                  Progress
+                </p>
+                <p className="mt-2 text-4xl font-black text-sky-300">
+                  {stats.progress}%
+                </p>
+                <p className="mt-1 text-xs font-semibold text-white/50">
+                  {formatNumber(stats.voted)} of {formatNumber(stats.total)}
+                </p>
               </div>
             </div>
 
-            <form onSubmit={searchVoters} className="mb-6">
-              <label className="text-sm font-medium text-slate-700">
-                Search Voter
-              </label>
+            <div className="mt-7">
+              <div className="mb-2 flex items-center justify-between text-xs font-bold text-white/60">
+                <span>Marked voted</span>
+                <span>{stats.progress}%</span>
+              </div>
 
-              <div className="mt-2 flex gap-3">
-                <input
-                  ref={searchRef}
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-5 py-4 text-xl font-semibold text-slate-900 outline-none focus:border-sky-700"
-                  placeholder="Reg no., surname, first name..."
+              <div className="h-3 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-3 rounded-full bg-sky-400"
+                  style={{ width: `${clamp(stats.progress)}%` }}
                 />
-
-                <button
-                  type="submit"
-                  disabled={searching}
-                  className="rounded-xl bg-sky-700 px-8 py-4 text-lg font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
-                >
-                  {searching ? "Searching..." : "Search"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="rounded-xl border border-slate-300 px-5 py-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Clear
-                </button>
               </div>
-            </form>
-
-            {message && (
-              <div className="mb-6 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">
-                {message}
-              </div>
-            )}
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[750px] border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b bg-slate-50 text-slate-600">
-                    <th className="p-3">Reg No.</th>
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Age / DOB</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {results.map((voter) => (
-                    <tr key={voter.id} className="border-b">
-                      <td className="p-3 font-bold text-slate-900">
-                        {getRegNo(voter)}
-                      </td>
-
-                      <td className="p-3">
-                        <p className="font-bold text-slate-900">
-                          {getDisplayName(voter)}
-                        </p>
-
-                        <p className="text-xs text-slate-500">
-                          Campaigner:{" "}
-                          {voter.campaigners?.full_name || "Unassigned"}
-                        </p>
-                      </td>
-
-                      <td className="p-3 text-slate-700">
-                        <p className="font-semibold">
-                          Age: {formatAge(voter.age)}
-                        </p>
-
-                        <p className="text-xs text-slate-500">
-                          DOB: {formatDob(voter.dob)}
-                        </p>
-                      </td>
-
-                      <td className="p-3">
-                        {voter.voted ? (
-                          <div>
-                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
-                              Already Voted
-                            </span>
-
-                            {voter.voted_at && (
-                              <p className="mt-2 text-xs font-semibold text-green-700">
-                                Time: {formatTime(voter.voted_at)}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">
-                            Not Voted
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="p-3">
-                        <button
-                          onClick={() => markAsVoted(voter)}
-                          disabled={updatingId === voter.id || voter.voted}
-                          className="rounded-xl bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                        >
-                          {updatingId === voter.id
-                            ? "Marking..."
-                            : voter.voted
-                            ? "Done"
-                            : "Mark Voted"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {results.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="p-10 text-center text-slate-500"
-                      >
-                        Search for a voter to begin.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
             </div>
           </section>
 
-          <aside className="space-y-6">
-            <section className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-xl font-bold text-slate-900">
-                Classroom Count
-              </h2>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <SummaryCard
+              label="Assigned"
+              value={formatNumber(stats.total)}
+              detail="Visible list"
+              tone="sky"
+            />
+            <SummaryCard
+              label="Voted"
+              value={formatNumber(stats.voted)}
+              detail="Marked today"
+              tone="green"
+            />
+            <SummaryCard
+              label="Left"
+              value={formatNumber(stats.notVoted)}
+              detail="Not yet marked"
+              tone={stats.notVoted > 0 ? "amber" : "green"}
+            />
+          </div>
 
-              <div className="mt-5 grid gap-4">
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Assigned List</p>
-                  <h3 className="mt-1 text-3xl font-bold text-slate-900">
-                    {stats.totalAssigned}
-                  </h3>
+          {lastMarkedVoter && (
+            <section className="mt-4 rounded-[2rem] border border-green-100 bg-green-50 p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-green-700">
+                    Immediate Past Voter
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">
+                    {getDisplayName(lastMarkedVoter)}
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-green-800">
+                    {getRegNo(lastMarkedVoter)} · Marked{" "}
+                    {formatDateTime(lastMarkedVoter.voted_at)}
+                  </p>
                 </div>
 
-                <div className="rounded-xl bg-green-50 p-4">
-                  <p className="text-sm text-green-700">Voted</p>
-                  <h3 className="mt-1 text-3xl font-bold text-green-800">
-                    {stats.voted}
-                  </h3>
-                </div>
-
-                <div className="rounded-xl bg-red-50 p-4">
-                  <p className="text-sm text-red-700">Not Yet Voted</p>
-                  <h3 className="mt-1 text-3xl font-bold text-red-800">
-                    {stats.notVoted}
-                  </h3>
-                </div>
+                <button
+                  onClick={() => setVotedStatus(lastMarkedVoter, false)}
+                  disabled={markingId === lastMarkedVoter.id}
+                  className="rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Undo
+                </button>
               </div>
             </section>
+          )}
 
-            <section className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-xl font-bold text-slate-900">
-                Immediate Past Voter
-              </h2>
+          <section className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+              <div>
+                <FieldLabel>Search Voter</FieldLabel>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-4 text-base font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+                  placeholder="Reg no., first name, last name, or address..."
+                  autoFocus
+                />
+              </div>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Only the last voter marked at this station is shown.
-              </p>
+              <div>
+                <FieldLabel>Status</FieldLabel>
+                <select
+                  value={votedFilter}
+                  onChange={(event) => setVotedFilter(event.target.value as VotedFilter)}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-base font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100 md:w-44"
+                >
+                  <option>Not Voted</option>
+                  <option>Voted</option>
+                  <option>All</option>
+                </select>
+              </div>
+            </div>
+          </section>
 
-              {!immediatePastVoter ? (
-                <div className="mt-5 rounded-xl border border-dashed border-slate-300 p-6 text-center text-slate-500">
-                  No voter marked yet.
-                </div>
-              ) : (
-                <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-5">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-green-700">
-                    Last Marked
-                  </p>
+          <section className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Voter Checklist
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Showing {formatNumber(filteredVoters.length)} voter(s).
+                </p>
+              </div>
 
-                  <h3 className="mt-2 text-2xl font-bold text-slate-900">
-                    {getDisplayName(immediatePastVoter)}
-                  </h3>
+              {loadingVoters && (
+                <span className="w-fit rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+                  Loading...
+                </span>
+              )}
+            </div>
 
-                  <div className="mt-3 space-y-1 text-sm text-slate-700">
-                    <p>
-                      <span className="font-semibold">Reg No:</span>{" "}
-                      {getRegNo(immediatePastVoter)}
-                    </p>
+            <div className="grid gap-3">
+              {filteredVoters.map((voter) => (
+                <article
+                  key={voter.id}
+                  className={`rounded-[1.7rem] border p-4 ${
+                    voter.voted
+                      ? "border-green-100 bg-green-50"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                          {getRegNo(voter)}
+                        </span>
 
-                    <p>
-                      <span className="font-semibold">Age:</span>{" "}
-                      {formatAge(immediatePastVoter.age)}
-                    </p>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            voter.voted
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {voter.voted ? "Voted" : "Not Voted"}
+                        </span>
+                      </div>
 
-                    <p>
-                      <span className="font-semibold">DOB:</span>{" "}
-                      {formatDob(immediatePastVoter.dob)}
-                    </p>
+                      <h3 className="mt-3 break-words text-2xl font-black text-slate-950">
+                        {getDisplayName(voter)}
+                      </h3>
 
-                    <p>
-                      <span className="font-semibold">Time:</span>{" "}
-                      {formatTime(immediatePastVoter.voted_at)}
-                    </p>
+                      <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-3">
+                        <p>
+                          <span className="font-black text-slate-400">Age:</span>{" "}
+                          {voter.age || "—"}
+                        </p>
+                        <p>
+                          <span className="font-black text-slate-400">
+                            Polling:
+                          </span>{" "}
+                          {getPollingArea(voter) || "—"}
+                        </p>
+                        <p>
+                          <span className="font-black text-slate-400">
+                            Address:
+                          </span>{" "}
+                          {getAddress(voter) || "—"}
+                        </p>
+                      </div>
+
+                      {voter.voted_at && (
+                        <p className="mt-3 text-xs font-black text-green-700">
+                          Marked voted at {formatTime(voter.voted_at)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="shrink-0">
+                      {voter.voted ? (
+                        <button
+                          onClick={() => setVotedStatus(voter, false)}
+                          disabled={markingId === voter.id}
+                          className="w-full rounded-2xl border border-red-200 bg-white px-5 py-4 text-sm font-black text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+                        >
+                          Undo
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setVotedStatus(voter, true)}
+                          disabled={markingId === voter.id}
+                          className="w-full rounded-2xl bg-sky-700 px-5 py-4 text-sm font-black text-white shadow-sm hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300 md:w-auto"
+                        >
+                          {markingId === voter.id ? "Marking..." : "Mark Voted"}
+                        </button>
+                      )}
+                    </div>
                   </div>
+                </article>
+              ))}
 
-                  <button
-                    onClick={undoImmediatePast}
-                    disabled={updatingId === immediatePastVoter.id}
-                    className="mt-5 w-full rounded-xl border border-red-300 bg-white px-4 py-3 font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Undo Last Mark
-                  </button>
+              {filteredVoters.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
+                  No voters match this search.
                 </div>
               )}
-            </section>
-          </aside>
+            </div>
+          </section>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

@@ -82,7 +82,11 @@ type PollingSummary = {
   total: number;
   projected: number;
   opponent: number;
+  margin: number;
   voted: number;
+  votedTeam: number;
+  votedOpponent: number;
+  votedUndecided: number;
   confirmedLeft: number;
 };
 
@@ -388,6 +392,100 @@ function DonutMetric({
   );
 }
 
+function VotesCastedDonut({
+  teamVotes,
+  opponentVotes,
+  undecidedVotes,
+  totalVotes,
+  opponentName,
+}: {
+  teamVotes: number;
+  opponentVotes: number;
+  undecidedVotes: number;
+  totalVotes: number;
+  opponentName: string;
+}) {
+  const total = Math.max(totalVotes, 0);
+  const teamPct = total > 0 ? (teamVotes / total) * 100 : 0;
+  const opponentPct = total > 0 ? (opponentVotes / total) * 100 : 0;
+  const undecidedPct = total > 0 ? (undecidedVotes / total) * 100 : 0;
+
+  const teamEnd = teamPct;
+  const opponentEnd = teamPct + opponentPct;
+  const undecidedEnd = teamPct + opponentPct + undecidedPct;
+
+  const background =
+    total > 0
+      ? `conic-gradient(#0ea5e9 0% ${teamEnd}%, #ef4444 ${teamEnd}% ${opponentEnd}%, #f59e0b ${opponentEnd}% ${undecidedEnd}%, #e2e8f0 ${undecidedEnd}% 100%)`
+      : "#e2e8f0";
+
+  const items = [
+    {
+      label: OUR_NAME,
+      value: teamVotes,
+      percent: percentage(teamVotes, total),
+      color: "bg-sky-500",
+      text: "text-sky-700",
+    },
+    {
+      label: opponentName,
+      value: opponentVotes,
+      percent: percentage(opponentVotes, total),
+      color: "bg-red-500",
+      text: "text-red-700",
+    },
+    {
+      label: "Undecided",
+      value: undecidedVotes,
+      percent: percentage(undecidedVotes, total),
+      color: "bg-amber-500",
+      text: "text-amber-700",
+    },
+  ];
+
+  return (
+    <div>
+      <div className="relative mx-auto flex h-52 w-52 items-center justify-center">
+        <div className="absolute inset-0 rounded-full" style={{ background }} />
+        <div className="absolute inset-6 rounded-full bg-white shadow-inner" />
+        <div className="relative text-center">
+          <p className="text-4xl font-black tracking-tight text-slate-950">
+            {formatNumber(total)}
+          </p>
+          <p className="mt-1 text-xs font-black uppercase tracking-wide text-slate-400">
+            Total Votes
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center justify-between gap-3 rounded-[1.35rem] bg-slate-50 px-3 py-3"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span className={`h-3 w-3 shrink-0 rounded-full ${item.color}`} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-950">
+                  {item.label}
+                </p>
+                <p className="text-xs font-semibold text-slate-500">
+                  {item.percent}% of votes casted
+                </p>
+              </div>
+            </div>
+
+            <p className={`shrink-0 text-lg font-black ${item.text}`}>
+              {formatNumber(item.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [settings, setSettings] = useState<CampaignSettings | null>(null);
@@ -685,7 +783,11 @@ export default function DashboardPage() {
         total: 0,
         projected: 0,
         opponent: 0,
+        margin: 0,
         voted: 0,
+        votedTeam: 0,
+        votedOpponent: 0,
+        votedUndecided: 0,
         confirmedLeft: 0,
       });
     });
@@ -699,7 +801,11 @@ export default function DashboardPage() {
           total: 0,
           projected: 0,
           opponent: 0,
+          margin: 0,
           voted: 0,
+          votedTeam: 0,
+          votedOpponent: 0,
+          votedUndecided: 0,
           confirmedLeft: 0,
         });
       }
@@ -715,22 +821,34 @@ export default function DashboardPage() {
 
       if (isLeaning(voter.support_status)) item.projected += 0.5;
       if (isOpponent(voter.support_status)) item.opponent += 1;
-      if (voter.voted) item.voted += 1;
+
+      if (voter.voted) {
+        item.voted += 1;
+
+        if (isTeamSupport(voter.support_status)) item.votedTeam += 1;
+        else if (isOpponent(voter.support_status)) item.votedOpponent += 1;
+        else item.votedUndecided += 1;
+      }
     });
 
     return Array.from(map.values())
-      .map((item) => ({
-        ...item,
-        projected: Math.round(item.projected),
-      }))
-      .sort((a, b) => b.confirmedLeft - a.confirmedLeft);
+      .map((item) => {
+        const projected = Math.round(item.projected);
+
+        return {
+          ...item,
+          projected,
+          margin: projected - item.opponent,
+        };
+      })
+      .sort((a, b) => b.voted - a.voted);
   }, [voters, pollingAreas]);
 
   const topZones = zoneSummary.slice(0, 4);
   const riskZones = [...zoneSummary]
     .sort((a, b) => a.margin - b.margin)
     .slice(0, 4);
-  const topPollingAttention = pollingSummary.slice(0, 5);
+  const topPollingPerformance = pollingSummary.slice(0, 6);
 
   const teamStats = useMemo(() => {
     return {
@@ -781,9 +899,6 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                Campaign Dashboard
-              </p>
               <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
                 Dashboard
               </h1>
@@ -889,39 +1004,18 @@ export default function DashboardPage() {
 
             <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <SectionHeader
-                title="Campaign Pulse"
-                subtitle="Projected support, turnout and field pressure."
+                title="Votes Casted"
+                subtitle="Total votes marked by scrutineers, separated by recorded support status."
               />
 
-              <DonutMetric
-                percentageValue={stats.targetProgress}
-                center={`${clamp(stats.targetProgress)}%`}
-                label="of vote target"
+              <VotesCastedDonut
+                teamVotes={stats.teamVoted}
+                opponentVotes={stats.opponentVoted}
+                undecidedVotes={stats.undecidedVoted}
+                totalVotes={stats.totalVoted}
+                opponentName={opponentName}
               />
 
-              <div className="mt-4 grid gap-3">
-                <AppListItem
-                  icon="✓"
-                  title="Confirmed Supporters"
-                  subtitle={`${formatNumber(stats.leaning)} leaning supporters`}
-                  value={formatNumber(stats.confirmed)}
-                  tone="green"
-                />
-                <AppListItem
-                  icon="•"
-                  title="Undecided / Unknown"
-                  subtitle="Still needs follow-up"
-                  value={formatNumber(stats.undecidedUnknown)}
-                  tone="amber"
-                />
-                <AppListItem
-                  icon="!"
-                  title="Pickup Issues"
-                  subtitle={`${formatNumber(stats.pickupNeeded)} pickups needed`}
-                  value={formatNumber(stats.pickupIssues)}
-                  tone={stats.pickupIssues > 0 ? "red" : "green"}
-                />
-              </div>
             </section>
           </div>
 
@@ -1005,10 +1099,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <p className="mt-5 rounded-2xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-                Voted status is an operational turnout marker. It is not a record
-                of anyone’s private ballot.
-              </p>
             </Card>
 
             <Card>
@@ -1190,12 +1280,12 @@ export default function DashboardPage() {
           <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <Card>
               <SectionHeader
-                title="Polling Area Attention"
-                subtitle="Polling areas with confirmed supporters still left."
+                title="Polling Area Performance"
+                subtitle="Votes casted and support performance by polling area."
               />
 
               <div className="mt-5 space-y-3">
-                {topPollingAttention.map((item) => (
+                {topPollingPerformance.map((item) => (
                   <div
                     key={item.pollingArea}
                     className="rounded-[1.5rem] border border-slate-200 p-3"
@@ -1206,23 +1296,57 @@ export default function DashboardPage() {
                           Polling {item.pollingArea}
                         </p>
                         <p className="text-xs font-semibold text-slate-500">
-                          Total {formatNumber(item.total)} · Voted{" "}
-                          {formatNumber(item.voted)}
+                          Total casted {formatNumber(item.voted)} · Total voters{" "}
+                          {formatNumber(item.total)}
                         </p>
                       </div>
 
-                      <p className="shrink-0 text-lg font-black text-amber-700">
-                        {formatNumber(item.confirmedLeft)}
+                      <p
+                        className={`shrink-0 text-lg font-black ${
+                          item.margin >= 0 ? "text-green-700" : "text-red-700"
+                        }`}
+                      >
+                        {formatSigned(item.margin)}
                       </p>
                     </div>
 
                     <div className="mt-3">
-                      <ProgressBar value={item.voted} total={item.total} tone="green" />
+                      <ProgressBar value={item.voted} total={item.total} tone="sky" />
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                      <div className="rounded-2xl bg-sky-50 p-2">
+                        <p className="font-black text-sky-700">
+                          {formatNumber(item.votedTeam)}
+                        </p>
+                        <p className="mt-0.5 font-semibold text-slate-500">Rigo</p>
+                      </div>
+
+                      <div className="rounded-2xl bg-red-50 p-2">
+                        <p className="font-black text-red-700">
+                          {formatNumber(item.votedOpponent)}
+                        </p>
+                        <p className="mt-0.5 font-semibold text-slate-500">Opp.</p>
+                      </div>
+
+                      <div className="rounded-2xl bg-amber-50 p-2">
+                        <p className="font-black text-amber-700">
+                          {formatNumber(item.votedUndecided)}
+                        </p>
+                        <p className="mt-0.5 font-semibold text-slate-500">Und.</p>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-50 p-2">
+                        <p className="font-black text-slate-700">
+                          {formatNumber(item.confirmedLeft)}
+                        </p>
+                        <p className="mt-0.5 font-semibold text-slate-500">Left</p>
+                      </div>
                     </div>
                   </div>
                 ))}
 
-                {topPollingAttention.length === 0 && (
+                {topPollingPerformance.length === 0 && (
                   <div className="rounded-3xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
                     No polling area data available.
                   </div>
