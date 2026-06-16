@@ -72,157 +72,105 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-slate-950 lg:flex lg:items-center lg:justify-center lg:p-6">
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute -left-28 -top-28 h-72 w-72 rounded-full bg-blue-600/30 blur-3xl sm:h-96 sm:w-96" />
-        <div className="absolute -bottom-32 -right-32 h-80 w-80 rounded-full bg-cyan-400/20 blur-3xl sm:h-[520px] sm:w-[520px]" />
-        <div className="absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
-      </div>
+    <main className="flex min-h-screen items-center justify-center bg-[#e9edff] p-4 sm:p-6">
+      <div className="grid w-full max-w-5xl items-center gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="hidden min-h-[560px] overflow-hidden rounded-[2rem] bg-[#2029a6] p-8 text-white shadow-2xl lg:flex lg:flex-col lg:items-center lg:justify-center">
+          <div className="flex h-24 w-24 items-center justify-center rounded-[2rem] bg-white/10 text-3xl font-black tracking-tight shadow-inner">
+            TR
+          </div>
 
-      <section className="relative flex min-h-screen items-center justify-center px-4 py-6 sm:px-6 lg:min-h-0 lg:w-full lg:max-w-5xl">
-        <div className="grid w-full overflow-hidden rounded-[1.75rem] border border-white/10 bg-white shadow-2xl lg:grid-cols-[1.05fr_0.95fr]">
-          <aside className="hidden min-h-[620px] bg-slate-950 p-10 text-white lg:block">
-            <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-8">
-              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-500/30 blur-3xl" />
-              <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+          <h1 className="mt-6 text-4xl font-black tracking-tight">
+            Team Rigo
+          </h1>
 
-              <div className="relative">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white text-2xl font-black text-blue-700 shadow-xl">
-                  TR
-                </div>
+          <p className="mt-3 max-w-xs text-center text-sm font-medium leading-6 text-white/70">
+            Campaign operations, voter tracking, and field coordination.
+          </p>
+        </section>
 
-                <h1 className="mt-8 text-5xl font-black tracking-tight">
-                  Team Rigo
-                </h1>
-
-                <p className="mt-4 max-w-sm text-lg text-slate-300">
-                  Campaign command center.
-                </p>
-              </div>
-
-              <div className="relative space-y-4">
-                <div className="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-slate-300">
-                      Path to Victory
-                    </p>
-                    <span className="rounded-full bg-green-400/20 px-3 py-1 text-xs font-black text-green-200">
-                      Live
-                    </span>
-                  </div>
-
-                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-3 w-3/4 rounded-full bg-blue-400" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs text-slate-400">Voters</p>
-                    <p className="mt-1 text-2xl font-black">Track</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs text-slate-400">Field</p>
-                    <p className="mt-1 text-2xl font-black">Ready</p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
-                    <p className="text-xs text-slate-400">Zones</p>
-                    <p className="mt-1 text-2xl font-black">Live</p>
-                  </div>
-                </div>
-              </div>
+        <section className="mx-auto w-full max-w-md overflow-hidden rounded-[2rem] bg-white px-6 py-8 shadow-2xl sm:px-8 sm:py-10 lg:min-h-[560px] lg:px-10">
+          <div className="flex justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#2029a6] text-xl font-black text-white shadow-lg shadow-blue-900/20">
+              TR
             </div>
-          </aside>
+          </div>
 
-          <section className="bg-white px-5 py-7 sm:px-8 sm:py-10 lg:flex lg:min-h-[620px] lg:items-center lg:px-12">
-            <div className="mx-auto w-full max-w-md">
-              <div className="mb-7 text-center lg:text-left">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-700 text-xl font-black text-white shadow-lg shadow-blue-700/20 lg:mx-0">
-                  TR
-                </div>
+          <div className="mt-8">
+            <h1 className="text-2xl font-black tracking-tight text-slate-900">
+              Login to your Account
+            </h1>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Secure access for authorized users.
+            </p>
+          </div>
 
-                <p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-blue-700">
-                  Secure Access
-                </p>
+          <div className="mt-7 space-y-4">
+            <div>
+              <label className="sr-only">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") login();
+                }}
+                className="w-full rounded-xl border border-slate-100 bg-white px-4 py-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.06)] outline-none transition placeholder:text-slate-400 focus:border-[#2029a6] focus:ring-4 focus:ring-blue-100"
+                placeholder="Email"
+              />
+            </div>
 
-                <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                  Sign in
-                </h2>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-bold text-slate-700">
-                    Email
-                  </label>
-
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") login();
-                    }}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:py-4"
-                    placeholder="you@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-bold text-slate-700">
-                    Password
-                  </label>
-
-                  <div className="mt-2 flex rounded-2xl border border-slate-200 bg-slate-50 transition focus-within:border-blue-700 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") login();
-                      }}
-                      className="w-full min-w-0 rounded-2xl bg-transparent px-4 py-3.5 text-base text-slate-950 outline-none placeholder:text-slate-400 sm:py-4"
-                      placeholder="Password"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((current) => !current)}
-                      className="shrink-0 px-4 text-sm font-black text-blue-700"
-                    >
-                      {showPassword ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                </div>
-
-                {message && (
-                  <div className="rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700 sm:p-4">
-                    {message}
-                  </div>
-                )}
+            <div>
+              <label className="sr-only">Password</label>
+              <div className="flex rounded-xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition focus-within:border-[#2029a6] focus-within:ring-4 focus-within:ring-blue-100">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") login();
+                  }}
+                  className="w-full min-w-0 rounded-xl bg-transparent px-4 py-4 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Password"
+                />
 
                 <button
-                  onClick={login}
-                  disabled={loading}
-                  className="group relative w-full overflow-hidden rounded-2xl bg-blue-700 px-5 py-4 font-black text-white shadow-lg shadow-blue-700/20 transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="shrink-0 px-4 text-xs font-black text-[#2029a6]"
                 >
-                  <span className="relative z-10">
-                    {loading ? "Signing in..." : "Enter"}
-                  </span>
-                  <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition duration-700 group-hover:translate-x-full" />
+                  {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
-
-              <div className="mt-6 flex items-center justify-center gap-2 text-xs font-semibold text-slate-400 lg:justify-start">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                Authorized users only
-              </div>
             </div>
-          </section>
-        </div>
-      </section>
+
+            {message && (
+              <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {message}
+              </div>
+            )}
+
+            <button
+              onClick={login}
+              disabled={loading}
+              className="w-full rounded-xl bg-[#2029a6] px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-900/20 transition hover:bg-[#18208a] disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+          </div>
+
+          <div className="mt-10 flex items-center gap-4">
+            <div className="h-px flex-1 bg-slate-100" />
+            <p className="text-xs font-semibold text-slate-400">
+              Authorized users only
+            </p>
+            <div className="h-px flex-1 bg-slate-100" />
+          </div>
+
+          <p className="mt-8 text-center text-xs font-medium text-slate-400">
+            Team Rigo Campaign Operations
+          </p>
+        </section>
+      </div>
     </main>
   );
 }

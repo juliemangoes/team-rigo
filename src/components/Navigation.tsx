@@ -26,7 +26,7 @@ const allLinks: NavLink[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
-    description: "Victory overview",
+    description: "Campaign overview",
   },
   {
     href: "/campaign-setup",
@@ -37,7 +37,7 @@ const allLinks: NavLink[] = [
   {
     href: "/voters",
     label: "Voters",
-    description: "Voter register",
+    description: "Voter records",
   },
   {
     href: "/campaigners",
@@ -54,7 +54,7 @@ const allLinks: NavLink[] = [
     href: "/team",
     label: "Team Setup",
     shortLabel: "Team",
-    description: "Users and roles",
+    description: "Users, roles and access",
   },
   {
     href: "/upload",
@@ -106,7 +106,7 @@ function isActiveLink(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function initials(name: string | null | undefined) {
+function getInitials(name: string | null | undefined) {
   if (!name) return "TR";
 
   const parts = name
@@ -117,11 +117,7 @@ function initials(name: string | null | undefined) {
 
   if (parts.length === 0) return "TR";
 
-  return parts.map((part) => part[0]?.toUpperCase()).join("");
-}
-
-function linkNumber(index: number) {
-  return String(index + 1).padStart(2, "0");
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
 }
 
 export default function Navigation() {
@@ -131,6 +127,9 @@ export default function Navigation() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
+
+  const links = useMemo(() => linksForRole(profile?.role || null), [profile]);
+  const homeHref = homeForRole(profile?.role || null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -185,9 +184,6 @@ export default function Navigation() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [menuOpen]);
-
-  const links = useMemo(() => linksForRole(profile?.role || null), [profile]);
-  const homeHref = homeForRole(profile?.role || null);
 
   if (hiddenRoutes.includes(pathname)) {
     return null;
@@ -275,15 +271,14 @@ export default function Navigation() {
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 lg:hidden"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:bg-slate-50 lg:hidden"
               aria-label="Open navigation menu"
               aria-expanded={menuOpen}
             >
-              <span>Menu</span>
               <span className="grid gap-1">
-                <span className="block h-0.5 w-4 rounded-full bg-slate-800" />
-                <span className="block h-0.5 w-4 rounded-full bg-slate-800" />
-                <span className="block h-0.5 w-4 rounded-full bg-slate-800" />
+                <span className="block h-0.5 w-5 rounded-full bg-slate-900" />
+                <span className="block h-0.5 w-5 rounded-full bg-slate-900" />
+                <span className="block h-0.5 w-5 rounded-full bg-slate-900" />
               </span>
             </button>
           </div>
@@ -291,141 +286,119 @@ export default function Navigation() {
       </nav>
 
       {menuOpen && (
-        <div className="fixed inset-0 z-[999] bg-slate-100 lg:hidden">
+        <div className="fixed inset-0 z-[999] bg-white lg:hidden">
           <div className="flex h-full flex-col">
-            <div className="relative overflow-hidden bg-white">
-              <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-blue-100 blur-3xl" />
-              <div className="absolute -left-16 top-10 h-40 w-40 rounded-full bg-cyan-100 blur-3xl" />
-
-              <div className="relative flex min-h-16 items-center justify-between border-b border-slate-200 px-4 py-4">
-                <Link
-                  href={homeHref}
-                  className="flex min-w-0 items-center gap-3"
-                  aria-label="Go to Team Rigo home"
-                >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-700 text-sm font-black text-white shadow-sm">
+            <div className="border-b border-slate-200 px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-700 text-sm font-black text-white">
                     TR
                   </div>
 
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-black uppercase tracking-wide text-slate-950">
-                      Team Rigo
+                    <p className="truncate text-base font-black text-slate-950">
+                      Menu
                     </p>
                     <p className="truncate text-xs font-semibold text-slate-500">
-                      Navigation
+                      Team Rigo
                     </p>
                   </div>
-                </Link>
+                </div>
 
                 <button
                   type="button"
                   onClick={() => setMenuOpen(false)}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-2xl font-black leading-none text-slate-800 shadow-sm"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-black leading-none text-slate-900"
                   aria-label="Close navigation menu"
                 >
                   ×
                 </button>
               </div>
-
-              <div className="relative px-4 py-4">
-                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                  {profile ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-white">
-                        {initials(profile.full_name)}
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-black text-slate-950">
-                          {profile.full_name}
-                        </p>
-
-                        <p className="mt-0.5 truncate text-sm font-semibold text-slate-500">
-                          {profile.role || "No Role"}
-                          {profile.zone ? ` · ${profile.zone}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm font-semibold text-slate-500">
-                      {loadingProfile ? "Loading profile..." : "No profile loaded"}
-                    </p>
-                  )}
-                </div>
-              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                {links.map((link, index) => {
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              <div className="divide-y divide-slate-100 rounded-3xl border border-slate-200 bg-white">
+                {links.map((link) => {
                   const active = isActiveLink(pathname, link.href);
 
                   return (
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`min-h-[112px] rounded-3xl border p-4 shadow-sm transition ${
-                        active
-                          ? "border-blue-700 bg-blue-700 text-white"
-                          : "border-slate-200 bg-white text-slate-950 hover:border-blue-200 hover:bg-blue-50"
-                      }`}
+                      className={`flex items-center justify-between gap-4 px-4 py-4 transition ${
+                        active ? "bg-blue-50" : "hover:bg-slate-50"
+                      } first:rounded-t-3xl last:rounded-b-3xl`}
                     >
-                      <div className="flex h-full flex-col justify-between">
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-black ${
-                              active
-                                ? "bg-white/20 text-white"
-                                : "bg-slate-100 text-slate-500"
-                            }`}
-                          >
-                            {linkNumber(index)}
+                      <div className="min-w-0">
+                        <p
+                          className={`truncate text-base font-black ${
+                            active ? "text-blue-700" : "text-slate-950"
+                          }`}
+                        >
+                          {link.label}
+                        </p>
+
+                        <p className="mt-0.5 truncate text-sm font-semibold text-slate-500">
+                          {link.description}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        {active && (
+                          <span className="rounded-full bg-blue-700 px-2.5 py-1 text-xs font-black text-white">
+                            Open
                           </span>
-
-                          {active && (
-                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-blue-700">
-                              Open
-                            </span>
-                          )}
-                        </div>
-
-                        <div>
-                          <p className="break-words text-lg font-black leading-tight">
-                            {link.shortLabel || link.label}
-                          </p>
-                          <p
-                            className={`mt-1 line-clamp-2 text-xs font-semibold ${
-                              active ? "text-blue-100" : "text-slate-500"
-                            }`}
-                          >
-                            {link.description}
-                          </p>
-                        </div>
+                        )}
+                        <span className="text-xl font-black text-slate-300">
+                          ›
+                        </span>
                       </div>
                     </Link>
                   );
                 })}
 
                 {links.length === 0 && (
-                  <div className="col-span-2 rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm font-semibold text-slate-500">
+                  <div className="p-6 text-center text-sm font-semibold text-slate-500">
                     No navigation links available for this account.
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="border-t border-slate-200 bg-white p-4">
+            <div className="border-t border-slate-200 bg-slate-50 p-4">
+              {profile ? (
+                <div className="mb-3 flex items-center gap-3 rounded-3xl bg-white p-3 shadow-sm">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white">
+                    {getInitials(profile.full_name)}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-950">
+                      {profile.full_name}
+                    </p>
+                    <p className="truncate text-xs font-semibold text-slate-500">
+                      {profile.role || "No Role"}
+                      {profile.zone ? ` · ${profile.zone}` : ""}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-3 rounded-3xl bg-white p-3 text-sm font-semibold text-slate-500 shadow-sm">
+                  {loadingProfile ? "Loading profile..." : "No profile loaded"}
+                </div>
+              )}
+
               <div className="grid grid-cols-[1fr_auto] gap-3">
                 <Link
                   href={homeHref}
-                  className="rounded-2xl bg-slate-100 px-4 py-4 text-center text-sm font-black text-slate-800"
+                  className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-800 shadow-sm"
                 >
                   Home
                 </Link>
 
                 <button
                   onClick={logout}
-                  className="rounded-2xl bg-red-600 px-6 py-4 text-sm font-black text-white shadow-sm hover:bg-red-700"
+                  className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-sm"
                 >
                   Logout
                 </button>

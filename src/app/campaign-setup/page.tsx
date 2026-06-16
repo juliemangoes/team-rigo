@@ -52,41 +52,41 @@ type SupportStatusOption = {
 
 type SetupTab = "victory" | "zones" | "polling" | "support" | "opponent";
 
-const tabs: {
+const setupSections: {
   id: SetupTab;
-  label: string;
-  shortLabel: string;
+  title: string;
+  shortTitle: string;
   description: string;
 }[] = [
   {
     id: "victory",
-    label: "Victory Settings",
-    shortLabel: "Victory",
-    description: "Election name and vote target.",
+    title: "Victory Settings",
+    shortTitle: "Victory",
+    description: "Campaign name and vote target",
   },
   {
     id: "zones",
-    label: "Zones",
-    shortLabel: "Zones",
-    description: "Campaign zone options.",
+    title: "Campaign Zones",
+    shortTitle: "Zones",
+    description: "Zone options for voters and team assignments",
   },
   {
     id: "polling",
-    label: "Polling Areas",
-    shortLabel: "Polling",
-    description: "Polling area options.",
+    title: "Polling Areas",
+    shortTitle: "Polling",
+    description: "Polling area codes and locations",
   },
   {
     id: "support",
-    label: "Support Fields",
-    shortLabel: "Support",
-    description: "Support status labels and visibility.",
+    title: "Support Fields",
+    shortTitle: "Support",
+    description: "Support status labels and visibility",
   },
   {
     id: "opponent",
-    label: "Opponent",
-    shortLabel: "Opponent",
-    description: "Opponent name used on the dashboard.",
+    title: "Opponent",
+    shortTitle: "Opponent",
+    description: "Opponent name for dashboard comparisons",
   },
 ];
 
@@ -112,7 +112,7 @@ function cleanNumber(value: string, fallback = 0) {
   return Math.max(0, Math.round(numberValue));
 }
 
-function colorClass(color: string | null | undefined) {
+function colorPill(color: string | null | undefined) {
   if (color === "green") return "bg-green-100 text-green-800";
   if (color === "blue") return "bg-blue-100 text-blue-800";
   if (color === "amber") return "bg-amber-100 text-amber-800";
@@ -123,7 +123,15 @@ function colorClass(color: string | null | undefined) {
   return "bg-slate-100 text-slate-800";
 }
 
-function SectionTitle({
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+      {children}
+    </label>
+  );
+}
+
+function SectionHeader({
   title,
   subtitle,
   action,
@@ -133,8 +141,8 @@ function SectionTitle({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
         <h2 className="text-2xl font-black tracking-tight text-slate-950">
           {title}
         </h2>
@@ -146,8 +154,20 @@ function SectionTitle({
   );
 }
 
-function InputLabel({ children }: { children: ReactNode }) {
-  return <label className="text-sm font-black text-slate-700">{children}</label>;
+function PageCard({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-6 ${className}`}
+    >
+      {children}
+    </section>
+  );
 }
 
 function SummaryCard({
@@ -160,28 +180,71 @@ function SummaryCard({
   detail?: string;
 }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs font-black uppercase tracking-wide text-slate-400">
         {label}
       </p>
       <p className="mt-2 truncate text-2xl font-black text-slate-950">
         {value}
       </p>
-      {detail && <p className="mt-1 text-xs text-slate-500">{detail}</p>}
+      {detail && <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>}
     </div>
   );
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500">
+    <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500">
       {children}
     </div>
   );
 }
 
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      placeholder={placeholder}
+    />
+  );
+}
+
+function SelectInput({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+    >
+      {children}
+    </select>
+  );
+}
+
 export default function CampaignSetupPage() {
   const [activeTab, setActiveTab] = useState<SetupTab>("victory");
+  const [editingSupportId, setEditingSupportId] = useState("");
 
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [settings, setSettings] = useState<CampaignSettings | null>(null);
@@ -595,6 +658,7 @@ export default function CampaignSetupPage() {
     }
 
     setMessage("Support field saved.");
+    setEditingSupportId("");
     await loadSupportStatusOptions();
 
     setSavingSupportId("");
@@ -611,15 +675,17 @@ export default function CampaignSetupPage() {
     };
   }, [settings, zones, pollingAreas, competitors, supportStatusOptions]);
 
+  const activeSection =
+    setupSections.find((section) => section.id === activeTab) ||
+    setupSections[0];
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-3xl bg-white p-6 text-center shadow">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Team Rigo
-            </p>
-            <h1 className="mt-3 text-xl font-bold text-slate-900">
+          <div className="rounded-[2rem] bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading campaign setup...
             </h1>
           </div>
@@ -631,13 +697,11 @@ export default function CampaignSetupPage() {
   if (!canAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
-        <div className="w-full max-w-xl rounded-2xl bg-white p-6 text-center shadow sm:p-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-            Team Rigo
-          </p>
-          <h1 className="mt-3 text-2xl font-bold text-slate-900">
+        <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 text-center shadow-sm sm:p-8">
+          <h1 className="text-2xl font-black text-slate-900">
             Campaign Manager Access Only
           </h1>
+
           <p className="mt-3 text-slate-600">
             Campaign setup is restricted to the Campaign Manager.
           </p>
@@ -648,7 +712,7 @@ export default function CampaignSetupPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100">
-      <section className="border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-8">
+      <section className="bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -656,8 +720,8 @@ export default function CampaignSetupPage() {
                 Campaign Setup
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500 sm:text-base">
-                Manage the core options that power the dashboard, voters page,
-                reports, and field views.
+                Set the options used across the dashboard, voters page, reports,
+                field view and scrutineer workflow.
               </p>
             </div>
 
@@ -676,11 +740,11 @@ export default function CampaignSetupPage() {
             />
             <SummaryCard label="Zones" value={formatNumber(setupSummary.zones)} />
             <SummaryCard
-              label="Polling Areas"
+              label="Polling"
               value={formatNumber(setupSummary.pollingAreas)}
             />
             <SummaryCard
-              label="Support Fields"
+              label="Support"
               value={formatNumber(setupSummary.supportStatuses)}
             />
             <SummaryCard label="Opponent" value={setupSummary.opponent} />
@@ -691,36 +755,47 @@ export default function CampaignSetupPage() {
       <section className="px-4 py-5 sm:px-6 sm:py-8">
         <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[280px_1fr]">
           <aside className="lg:sticky lg:top-24 lg:self-start">
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:grid lg:gap-2 lg:overflow-visible lg:px-0 lg:pb-0">
-              {tabs.map((tab) => {
-                const active = activeTab === tab.id;
+            <div className="rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="lg:hidden">
+                <FieldLabel>Setup Section</FieldLabel>
+                <SelectInput
+                  value={activeTab}
+                  onChange={(value) => setActiveTab(value as SetupTab)}
+                >
+                  {setupSections.map((section) => (
+                    <option key={section.id} value={section.id}>
+                      {section.shortTitle}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
 
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`min-w-fit rounded-2xl border px-4 py-3 text-left transition lg:w-full ${
-                      active
-                        ? "border-blue-700 bg-blue-700 text-white shadow-sm"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50"
-                    }`}
-                  >
-                    <p className="text-sm font-black lg:hidden">
-                      {tab.shortLabel}
-                    </p>
-                    <p className="hidden text-sm font-black lg:block">
-                      {tab.label}
-                    </p>
-                    <p
-                      className={`mt-1 hidden text-xs lg:block ${
-                        active ? "text-blue-100" : "text-slate-500"
+              <div className="hidden lg:grid lg:gap-2">
+                {setupSections.map((section) => {
+                  const active = activeTab === section.id;
+
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveTab(section.id)}
+                      className={`rounded-2xl px-4 py-3 text-left transition ${
+                        active
+                          ? "bg-blue-700 text-white"
+                          : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
-                      {tab.description}
-                    </p>
-                  </button>
-                );
-              })}
+                      <p className="text-sm font-black">{section.shortTitle}</p>
+                      <p
+                        className={`mt-1 text-xs ${
+                          active ? "text-blue-100" : "text-slate-500"
+                        }`}
+                      >
+                        {section.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </aside>
 
@@ -731,31 +806,38 @@ export default function CampaignSetupPage() {
               </div>
             )}
 
+            <div className="mb-4 lg:hidden">
+              <h2 className="text-2xl font-black text-slate-950">
+                {activeSection.shortTitle}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {activeSection.description}
+              </p>
+            </div>
+
             {activeTab === "victory" && (
-              <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-6">
-                <SectionTitle
+              <PageCard>
+                <SectionHeader
                   title="Victory Settings"
                   subtitle="Set the campaign name and the vote target used by the dashboard."
                 />
 
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
                   <div className="md:col-span-2">
-                    <InputLabel>Election / Campaign Name</InputLabel>
-                    <input
+                    <FieldLabel>Election / Campaign Name</FieldLabel>
+                    <TextInput
                       value={electionName}
-                      onChange={(event) => setElectionName(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      onChange={setElectionName}
                       placeholder="Team Rigo Campaign"
                     />
                   </div>
 
                   <div>
-                    <InputLabel>Vote Target to Win</InputLabel>
-                    <input
+                    <FieldLabel>Vote Target to Win</FieldLabel>
+                    <TextInput
                       type="number"
                       value={voteTarget}
-                      onChange={(event) => setVoteTarget(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      onChange={setVoteTarget}
                       placeholder="Example: 1200"
                     />
                   </div>
@@ -768,43 +850,47 @@ export default function CampaignSetupPage() {
                 >
                   {savingSettings ? "Saving..." : "Save Victory Settings"}
                 </button>
-              </section>
+              </PageCard>
             )}
 
             {activeTab === "zones" && (
-              <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-6">
-                <SectionTitle
+              <PageCard>
+                <SectionHeader
                   title="Campaign Zones"
-                  subtitle="Use the same zone names that appear in voter records and team assignments."
+                  subtitle="Add the exact zone names used in voter records and team assignments."
                 />
 
-                <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-6 rounded-[1.5rem] bg-slate-50 p-4">
                   <h3 className="text-lg font-black text-slate-950">Add Zone</h3>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-4">
-                    <input
-                      value={zoneName}
-                      onChange={(event) => setZoneName(event.target.value)}
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                      placeholder="Zone name"
-                    />
+                    <div>
+                      <FieldLabel>Name</FieldLabel>
+                      <TextInput
+                        value={zoneName}
+                        onChange={setZoneName}
+                        placeholder="Zone 1"
+                      />
+                    </div>
 
-                    <input
-                      value={zoneDescription}
-                      onChange={(event) =>
-                        setZoneDescription(event.target.value)
-                      }
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700 md:col-span-2"
-                      placeholder="Description"
-                    />
+                    <div className="md:col-span-2">
+                      <FieldLabel>Description</FieldLabel>
+                      <TextInput
+                        value={zoneDescription}
+                        onChange={setZoneDescription}
+                        placeholder="Optional"
+                      />
+                    </div>
 
-                    <input
-                      type="number"
-                      value={zoneOrder}
-                      onChange={(event) => setZoneOrder(event.target.value)}
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                      placeholder="Order"
-                    />
+                    <div>
+                      <FieldLabel>Order</FieldLabel>
+                      <TextInput
+                        type="number"
+                        value={zoneOrder}
+                        onChange={setZoneOrder}
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
 
                   <button
@@ -819,7 +905,7 @@ export default function CampaignSetupPage() {
                   {zones.map((zone) => (
                     <div
                       key={zone.id}
-                      className="flex flex-col gap-3 rounded-3xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <p className="break-words text-lg font-black text-slate-950">
@@ -833,7 +919,7 @@ export default function CampaignSetupPage() {
 
                       <button
                         onClick={() => deleteZone(zone)}
-                        className="w-full rounded-2xl border border-red-300 px-4 py-3 text-sm font-black text-red-700 hover:bg-red-50 sm:w-auto"
+                        className="w-full rounded-2xl border border-red-200 px-4 py-3 text-sm font-black text-red-700 hover:bg-red-50 sm:w-auto"
                       >
                         Delete
                       </button>
@@ -842,52 +928,58 @@ export default function CampaignSetupPage() {
 
                   {zones.length === 0 && <EmptyState>No zones added yet.</EmptyState>}
                 </div>
-              </section>
+              </PageCard>
             )}
 
             {activeTab === "polling" && (
-              <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-6">
-                <SectionTitle
+              <PageCard>
+                <SectionHeader
                   title="Polling Areas"
-                  subtitle="These options should match the polling areas used in voter records."
+                  subtitle="Add polling area codes, names and locations."
                 />
 
-                <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-6 rounded-[1.5rem] bg-slate-50 p-4">
                   <h3 className="text-lg font-black text-slate-950">
                     Add Polling Area
                   </h3>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-4">
-                    <input
-                      value={pollingCode}
-                      onChange={(event) => setPollingCode(event.target.value)}
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                      placeholder="Code"
-                    />
+                    <div>
+                      <FieldLabel>Code</FieldLabel>
+                      <TextInput
+                        value={pollingCode}
+                        onChange={setPollingCode}
+                        placeholder="39"
+                      />
+                    </div>
 
-                    <input
-                      value={pollingName}
-                      onChange={(event) => setPollingName(event.target.value)}
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                      placeholder="Name"
-                    />
+                    <div>
+                      <FieldLabel>Name</FieldLabel>
+                      <TextInput
+                        value={pollingName}
+                        onChange={setPollingName}
+                        placeholder="Optional"
+                      />
+                    </div>
 
-                    <input
-                      value={pollingLocation}
-                      onChange={(event) =>
-                        setPollingLocation(event.target.value)
-                      }
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                      placeholder="Location"
-                    />
+                    <div>
+                      <FieldLabel>Location</FieldLabel>
+                      <TextInput
+                        value={pollingLocation}
+                        onChange={setPollingLocation}
+                        placeholder="Optional"
+                      />
+                    </div>
 
-                    <input
-                      type="number"
-                      value={pollingOrder}
-                      onChange={(event) => setPollingOrder(event.target.value)}
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                      placeholder="Order"
-                    />
+                    <div>
+                      <FieldLabel>Order</FieldLabel>
+                      <TextInput
+                        type="number"
+                        value={pollingOrder}
+                        onChange={setPollingOrder}
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
 
                   <button
@@ -902,7 +994,7 @@ export default function CampaignSetupPage() {
                   {pollingAreas.map((area) => (
                     <div
                       key={area.id}
-                      className="flex flex-col gap-3 rounded-3xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <p className="break-words text-lg font-black text-slate-950">
@@ -917,7 +1009,7 @@ export default function CampaignSetupPage() {
 
                       <button
                         onClick={() => deletePollingArea(area)}
-                        className="w-full rounded-2xl border border-red-300 px-4 py-3 text-sm font-black text-red-700 hover:bg-red-50 sm:w-auto"
+                        className="w-full rounded-2xl border border-red-200 px-4 py-3 text-sm font-black text-red-700 hover:bg-red-50 sm:w-auto"
                       >
                         Delete
                       </button>
@@ -928,150 +1020,164 @@ export default function CampaignSetupPage() {
                     <EmptyState>No polling areas added yet.</EmptyState>
                   )}
                 </div>
-              </section>
+              </PageCard>
             )}
 
             {activeTab === "support" && (
-              <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-6">
-                <SectionTitle
-                  title="Support Status Fields"
-                  subtitle="Edit display labels, descriptions, order, color, and visibility. System values stay locked so reports still calculate correctly."
+              <PageCard>
+                <SectionHeader
+                  title="Support Fields"
+                  subtitle="Edit labels, order, color and visibility. System values stay locked for reporting."
                 />
 
-                <div className="mt-6 grid gap-3">
-                  {supportStatusOptions.map((option) => (
-                    <div
-                      key={option.id}
-                      className="rounded-3xl border border-slate-200 p-4"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-black ${colorClass(
-                                option.color
-                              )}`}
-                            >
-                              {option.value}
-                            </span>
+                <div className="mt-5 grid gap-3">
+                  {supportStatusOptions.map((option) => {
+                    const isEditing = editingSupportId === option.id;
 
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-black ${
-                                option.is_active
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
-                              {option.is_active ? "Active" : "Hidden"}
-                            </span>
+                    return (
+                      <div
+                        key={option.id}
+                        className="rounded-[1.5rem] border border-slate-200 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap gap-2">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-black ${colorPill(
+                                  option.color
+                                )}`}
+                              >
+                                {option.value}
+                              </span>
+
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-black ${
+                                  option.is_active
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {option.is_active ? "Active" : "Hidden"}
+                              </span>
+                            </div>
+
+                            <p className="mt-3 text-xl font-black text-slate-950">
+                              {option.label}
+                            </p>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                              {option.description || "No description"}
+                            </p>
                           </div>
 
-                          <h3 className="mt-3 break-words text-xl font-black text-slate-950">
-                            {option.label}
-                          </h3>
-
-                          <p className="mt-1 text-sm text-slate-500">
-                            {option.description || "No description"}
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => saveSupportStatusOption(option)}
-                          disabled={savingSupportId === option.id}
-                          className="w-full rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 sm:w-auto"
-                        >
-                          {savingSupportId === option.id ? "Saving..." : "Save"}
-                        </button>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.5fr_2fr_0.8fr_0.9fr_0.9fr]">
-                        <div>
-                          <InputLabel>System Value</InputLabel>
-                          <input
-                            value={option.value}
-                            disabled
-                            className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-500"
-                          />
-                        </div>
-
-                        <div>
-                          <InputLabel>Display Label</InputLabel>
-                          <input
-                            value={option.label}
-                            onChange={(event) =>
-                              updateSupportStatusLocal(option.id, {
-                                label: event.target.value,
-                              })
+                          <button
+                            onClick={() =>
+                              setEditingSupportId(isEditing ? "" : option.id)
                             }
-                            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                          />
-                        </div>
-
-                        <div>
-                          <InputLabel>Description</InputLabel>
-                          <input
-                            value={option.description || ""}
-                            onChange={(event) =>
-                              updateSupportStatusLocal(option.id, {
-                                description: event.target.value,
-                              })
-                            }
-                            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                            placeholder="Optional"
-                          />
-                        </div>
-
-                        <div>
-                          <InputLabel>Order</InputLabel>
-                          <input
-                            type="number"
-                            value={option.display_order ?? 0}
-                            onChange={(event) =>
-                              updateSupportStatusLocal(option.id, {
-                                display_order: cleanNumber(event.target.value),
-                              })
-                            }
-                            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                          />
-                        </div>
-
-                        <div>
-                          <InputLabel>Color</InputLabel>
-                          <select
-                            value={option.color || "slate"}
-                            onChange={(event) =>
-                              updateSupportStatusLocal(option.id, {
-                                color: event.target.value,
-                              })
-                            }
-                            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-800 hover:bg-slate-50 sm:w-auto"
                           >
-                            {colorOptions.map((color) => (
-                              <option key={color} value={color}>
-                                {color}
-                              </option>
-                            ))}
-                          </select>
+                            {isEditing ? "Close" : "Edit"}
+                          </button>
                         </div>
 
-                        <div>
-                          <InputLabel>Visibility</InputLabel>
-                          <select
-                            value={option.is_active ? "Active" : "Hidden"}
-                            onChange={(event) =>
-                              updateSupportStatusLocal(option.id, {
-                                is_active: event.target.value === "Active",
-                              })
-                            }
-                            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                          >
-                            <option>Active</option>
-                            <option>Hidden</option>
-                          </select>
-                        </div>
+                        {isEditing && (
+                          <div className="mt-5 rounded-[1.5rem] bg-slate-50 p-4">
+                            <div className="grid gap-3 lg:grid-cols-[1fr_1.3fr_1.8fr_0.7fr_0.8fr_0.8fr]">
+                              <div>
+                                <FieldLabel>System Value</FieldLabel>
+                                <input
+                                  value={option.value}
+                                  disabled
+                                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500"
+                                />
+                              </div>
+
+                              <div>
+                                <FieldLabel>Display Label</FieldLabel>
+                                <TextInput
+                                  value={option.label}
+                                  onChange={(value) =>
+                                    updateSupportStatusLocal(option.id, {
+                                      label: value,
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <FieldLabel>Description</FieldLabel>
+                                <TextInput
+                                  value={option.description || ""}
+                                  onChange={(value) =>
+                                    updateSupportStatusLocal(option.id, {
+                                      description: value,
+                                    })
+                                  }
+                                  placeholder="Optional"
+                                />
+                              </div>
+
+                              <div>
+                                <FieldLabel>Order</FieldLabel>
+                                <TextInput
+                                  type="number"
+                                  value={String(option.display_order ?? 0)}
+                                  onChange={(value) =>
+                                    updateSupportStatusLocal(option.id, {
+                                      display_order: cleanNumber(value),
+                                    })
+                                  }
+                                />
+                              </div>
+
+                              <div>
+                                <FieldLabel>Color</FieldLabel>
+                                <SelectInput
+                                  value={option.color || "slate"}
+                                  onChange={(value) =>
+                                    updateSupportStatusLocal(option.id, {
+                                      color: value,
+                                    })
+                                  }
+                                >
+                                  {colorOptions.map((color) => (
+                                    <option key={color} value={color}>
+                                      {color}
+                                    </option>
+                                  ))}
+                                </SelectInput>
+                              </div>
+
+                              <div>
+                                <FieldLabel>Visibility</FieldLabel>
+                                <SelectInput
+                                  value={option.is_active ? "Active" : "Hidden"}
+                                  onChange={(value) =>
+                                    updateSupportStatusLocal(option.id, {
+                                      is_active: value === "Active",
+                                    })
+                                  }
+                                >
+                                  <option>Active</option>
+                                  <option>Hidden</option>
+                                </SelectInput>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => saveSupportStatusOption(option)}
+                              disabled={savingSupportId === option.id}
+                              className="mt-4 w-full rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300 sm:w-auto"
+                            >
+                              {savingSupportId === option.id
+                                ? "Saving..."
+                                : "Save Field"}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {supportStatusOptions.length === 0 && (
                     <EmptyState>
@@ -1080,46 +1186,41 @@ export default function CampaignSetupPage() {
                     </EmptyState>
                   )}
                 </div>
-              </section>
+              </PageCard>
             )}
 
             {activeTab === "opponent" && (
-              <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-6">
-                <SectionTitle
-                  title="Opponent Setup"
-                  subtitle="Store the opponent name. The dashboard opponent total comes from voters marked Not Supporting."
+              <PageCard>
+                <SectionHeader
+                  title="Opponent"
+                  subtitle="Store the opponent name. Dashboard totals come from voters marked Not Supporting."
                 />
 
                 <div className="mt-6 grid gap-4 md:grid-cols-4">
                   <div>
-                    <InputLabel>Opponent Name</InputLabel>
-                    <input
+                    <FieldLabel>Opponent Name</FieldLabel>
+                    <TextInput
                       value={opponentName}
-                      onChange={(event) => setOpponentName(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      onChange={setOpponentName}
                       placeholder="Opponent"
                     />
                   </div>
 
                   <div className="md:col-span-2">
-                    <InputLabel>Description / Party</InputLabel>
-                    <input
+                    <FieldLabel>Description / Party</FieldLabel>
+                    <TextInput
                       value={opponentDescription}
-                      onChange={(event) =>
-                        setOpponentDescription(event.target.value)
-                      }
-                      className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      onChange={setOpponentDescription}
                       placeholder="Optional"
                     />
                   </div>
 
                   <div>
-                    <InputLabel>Order</InputLabel>
-                    <input
+                    <FieldLabel>Order</FieldLabel>
+                    <TextInput
                       type="number"
                       value={opponentOrder}
-                      onChange={(event) => setOpponentOrder(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                      onChange={setOpponentOrder}
                       placeholder="0"
                     />
                   </div>
@@ -1137,19 +1238,19 @@ export default function CampaignSetupPage() {
                   {competitors[0] && (
                     <button
                       onClick={deleteOpponent}
-                      className="rounded-2xl border border-red-300 px-5 py-3 font-black text-red-700 hover:bg-red-50"
+                      className="rounded-2xl border border-red-200 px-5 py-3 font-black text-red-700 hover:bg-red-50"
                     >
                       Delete Opponent
                     </button>
                   )}
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="mt-6 rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
                   Opponent support is not entered manually here. It is tallied
-                  automatically from voters whose support status is{" "}
+                  automatically from voters whose support status is marked{" "}
                   <span className="font-black">Not Supporting</span>.
                 </div>
-              </section>
+              </PageCard>
             )}
           </div>
         </div>
