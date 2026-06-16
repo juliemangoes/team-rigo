@@ -221,6 +221,19 @@ function textClass(tone: string) {
   return "text-slate-700";
 }
 
+// Lighter tone variants for use on the dark hero panel, where the 700-level
+// shades above are too low-contrast to read on small screens.
+function textClassOnDark(tone: string) {
+  if (tone === "green") return "text-green-300";
+  if (tone === "blue") return "text-blue-300";
+  if (tone === "amber") return "text-amber-300";
+  if (tone === "orange") return "text-orange-300";
+  if (tone === "red") return "text-red-300";
+  if (tone === "purple") return "text-purple-300";
+
+  return "text-slate-100";
+}
+
 function bgClass(tone: string) {
   if (tone === "green") return "bg-green-50";
   if (tone === "blue") return "bg-blue-50";
@@ -271,20 +284,46 @@ function CompactMetric({
   value,
   tone = "slate",
   detail,
+  dark = false,
 }: {
   label: string;
   value: string | number;
   tone?: string;
   detail?: string;
+  dark?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-b-0">
+    <div
+      className={`flex min-w-0 items-center justify-between gap-3 py-3 ${
+        dark
+          ? ""
+          : "border-b border-slate-100 last:border-b-0"
+      }`}
+    >
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-600">{label}</p>
-        {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
+        <p
+          className={`truncate text-sm font-semibold ${
+            dark ? "text-slate-300" : "text-slate-600"
+          }`}
+        >
+          {label}
+        </p>
+        {detail && (
+          <p
+            className={`mt-0.5 text-xs ${
+              dark ? "text-slate-400" : "text-slate-400"
+            }`}
+          >
+            {detail}
+          </p>
+        )}
       </div>
 
-      <p className={`shrink-0 text-xl font-black ${textClass(tone)}`}>
+      <p
+        className={`shrink-0 text-xl font-black ${
+          dark ? textClassOnDark(tone) : textClass(tone)
+        }`}
+      >
         {value}
       </p>
     </div>
@@ -901,24 +940,28 @@ export default function DashboardPage() {
 
             <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
               <CompactMetric
+                dark
                 label="Confirmed"
                 value={formatNumber(stats.confirmed)}
                 tone="green"
               />
 
               <CompactMetric
+                dark
                 label="Need"
                 value={formatNumber(stats.votesNeededFromProjected)}
                 tone={stats.votesNeededFromProjected > 0 ? "red" : "green"}
               />
 
               <CompactMetric
+                dark
                 label="Leaning"
                 value={formatNumber(stats.leaning)}
                 tone="purple"
               />
 
               <CompactMetric
+                dark
                 label="Not Voted"
                 value={formatNumber(stats.confirmedNotVoted)}
                 tone="amber"
@@ -1000,7 +1043,7 @@ export default function DashboardPage() {
                 }
               />
 
-              <div className="mt-3 divide-y divide-slate-100 sm:hidden">
+              <div className="mt-3 sm:hidden">
                 <CompactMetric
                   label="Unassigned Voters"
                   value={formatNumber(stats.unassigned)}
