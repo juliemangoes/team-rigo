@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -59,15 +58,6 @@ type Competitor = {
   display_order: number | null;
 };
 
-type CompetitorEstimate = {
-  id: string;
-  competitor_id: string | null;
-  zone: string | null;
-  polling_area: string | null;
-  estimated_votes: number | null;
-  notes: string | null;
-};
-
 type IssueVoter = {
   id: string;
   voter_reg_no: string | null;
@@ -88,6 +78,8 @@ type ZoneSummary = {
   confirmed: number;
   leaning: number;
   projected: number;
+  opponent: number;
+  margin: number;
   confirmedVoted: number;
   confirmedRemaining: number;
   pickupNeeded: number;
@@ -249,39 +241,6 @@ function bgClass(tone: string) {
   return "bg-slate-50";
 }
 
-
-function getRaceStatus(margin: number, competitorTotal: number) {
-  if (competitorTotal <= 0) {
-    return {
-      label: "No Competitor Data",
-      tone: "slate",
-      description: "Add competitor estimates in Campaign Setup.",
-    };
-  }
-
-  if (margin >= 75) {
-    return {
-      label: "Ahead",
-      tone: "green",
-      description: "Our projected vote strength is ahead of the top competitor estimate.",
-    };
-  }
-
-  if (margin <= -75) {
-    return {
-      label: "Behind",
-      tone: "red",
-      description: "The top competitor estimate is ahead of our projected vote strength.",
-    };
-  }
-
-  return {
-    label: "Toss Up",
-    tone: "amber",
-    description: "The race is close against the top competitor estimate.",
-  };
-}
-
 function ProgressBar({ value, tone = "blue" }: { value: number; tone?: string }) {
   return (
     <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
@@ -300,7 +259,7 @@ function SectionHeader({
 }: {
   title: string;
   subtitle: string;
-  action?: ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -398,9 +357,8 @@ export default function DashboardPage() {
 
   const [voters, setVoters] = useState<VoterSnapshot[]>([]);
   const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
-  const [issueVoters, setIssueVoters] = useState<IssueVoter[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [competitorEstimates, setCompetitorEstimates] = useState<CompetitorEstimate[]>([]);
+  const [issueVoters, setIssueVoters] = useState<IssueVoter[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -453,9 +411,8 @@ export default function DashboardPage() {
       pollingAreasResult,
       voterResult,
       campaignerResult,
+      competitorResult,
       issueResult,
-      competitorsResult,
-      competitorEstimatesResult,
     ] = await Promise.all([
       supabase
         .from("campaign_settings")
@@ -497,6 +454,12 @@ export default function DashboardPage() {
         .order("full_name", { ascending: true }),
 
       supabase
+        .from("competitors")
+        .select("id, name, description, display_order")
+        .order("display_order", { ascending: true })
+        .order("name", { ascending: true }),
+
+      supabase
         .from("voters")
         .select(
           `
@@ -516,17 +479,6 @@ export default function DashboardPage() {
         .eq("pickup_status", "Issue")
         .order("last_name", { ascending: true, nullsFirst: false })
         .limit(8),
-
-      supabase
-        .from("competitors")
-        .select("id, name, description, display_order")
-        .order("display_order", { ascending: true })
-        .order("name", { ascending: true }),
-
-      supabase
-        .from("competitor_estimates")
-        .select("id, competitor_id, zone, polling_area, estimated_votes, notes")
-        .range(0, 49999),
     ]);
 
     if (settingsResult.error) {
@@ -565,25 +517,18 @@ export default function DashboardPage() {
       setCampaigners(campaignerResult.data || []);
     }
 
+    if (competitorResult.error) {
+      console.error("Dashboard competitor error:", competitorResult.error);
+      setCompetitors([]);
+    } else {
+      setCompetitors(competitorResult.data || []);
+    }
+
     if (issueResult.error) {
       console.error("Issue voters error:", issueResult.error);
       setIssueVoters([]);
     } else {
       setIssueVoters(issueResult.data || []);
-    }
-
-    if (competitorsResult.error) {
-      console.error("Competitors error:", competitorsResult.error);
-      setCompetitors([]);
-    } else {
-      setCompetitors(competitorsResult.data || []);
-    }
-
-    if (competitorEstimatesResult.error) {
-      console.error("Competitor estimates error:", competitorEstimatesResult.error);
-      setCompetitorEstimates([]);
-    } else {
-      setCompetitorEstimates(competitorEstimatesResult.data || []);
     }
 
     setLoading(false);
@@ -604,6 +549,10 @@ export default function DashboardPage() {
 
     const undecided = voters.filter(
       (voter) => voter.support_status === "Undecided"
+    ).length;
+
+    const notSupporting = voters.filter(
+      (voter) => voter.support_status === "Not Supporting"
     ).length;
 
     const unknown = voters.filter(
@@ -632,6 +581,8 @@ export default function DashboardPage() {
     const assigned = voters.filter((voter) => voter.campaigner_id).length;
 
     const projectedVotes = Math.round(confirmed + leaning * 0.5);
+    const opponentEstimate = notSupporting;
+    const raceMargin = projectedVotes - opponentEstimate;
     const votesNeededFromConfirmed = Math.max(0, target - confirmed);
     const votesNeededFromProjected = Math.max(0, target - projectedVotes);
     const confirmedCushion = confirmed - target;
@@ -645,6 +596,7 @@ export default function DashboardPage() {
       confirmed,
       leaning,
       undecided,
+      notSupporting,
       unknown,
       pickupIssues,
       confirmedVoted,
@@ -653,6 +605,8 @@ export default function DashboardPage() {
       assigned,
       unassigned: total - assigned,
       projectedVotes,
+      opponentEstimate,
+      raceMargin,
       votesNeededFromConfirmed,
       votesNeededFromProjected,
       confirmedCushion,
@@ -665,48 +619,6 @@ export default function DashboardPage() {
     };
   }, [voters, settings]);
 
-  const competitorStats = useMemo(() => {
-    const totals = competitors
-      .map((competitor) => {
-        const total = competitorEstimates
-          .filter((estimate) => estimate.competitor_id === competitor.id)
-          .reduce((sum, estimate) => sum + (estimate.estimated_votes || 0), 0);
-
-        return {
-          id: competitor.id,
-          name: competitor.name,
-          description: competitor.description,
-          total,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-
-    const top = totals[0] || null;
-    const topByZone = new Map<string, number>();
-
-    if (top) {
-      competitorEstimates
-        .filter((estimate) => estimate.competitor_id === top.id)
-        .forEach((estimate) => {
-          const zone = estimate.zone || "No Zone";
-          topByZone.set(zone, (topByZone.get(zone) || 0) + (estimate.estimated_votes || 0));
-        });
-    }
-
-    const competitorTotal = top?.total || 0;
-    const margin = stats.projectedVotes - competitorTotal;
-    const raceStatus = getRaceStatus(margin, competitorTotal);
-
-    return {
-      totals,
-      top,
-      topByZone,
-      competitorTotal,
-      margin,
-      raceStatus,
-    };
-  }, [competitors, competitorEstimates, stats.projectedVotes]);
-
   const zoneSummary = useMemo(() => {
     const map = new Map<string, ZoneSummary>();
 
@@ -717,6 +629,8 @@ export default function DashboardPage() {
         confirmed: 0,
         leaning: 0,
         projected: 0,
+        opponent: 0,
+        margin: 0,
         confirmedVoted: 0,
         confirmedRemaining: 0,
         pickupNeeded: 0,
@@ -734,6 +648,8 @@ export default function DashboardPage() {
           confirmed: 0,
           leaning: 0,
           projected: 0,
+          opponent: 0,
+          margin: 0,
           confirmedVoted: 0,
           confirmedRemaining: 0,
           pickupNeeded: 0,
@@ -759,6 +675,10 @@ export default function DashboardPage() {
         item.leaning += 1;
       }
 
+      if (voter.support_status === "Not Supporting") {
+        item.opponent += 1;
+      }
+
       if (voter.pickup_needed) {
         item.pickupNeeded += 1;
       }
@@ -768,10 +688,15 @@ export default function DashboardPage() {
       }
     });
 
-    const items = Array.from(map.values()).map((item) => ({
-      ...item,
-      projected: Math.round(item.confirmed + item.leaning * 0.5),
-    }));
+    const items = Array.from(map.values()).map((item) => {
+      const projected = Math.round(item.confirmed + item.leaning * 0.5);
+
+      return {
+        ...item,
+        projected,
+        margin: projected - item.opponent,
+      };
+    });
 
     return items.sort((a, b) => a.zone.localeCompare(b.zone));
   }, [voters, setupZones]);
@@ -876,6 +801,8 @@ export default function DashboardPage() {
     };
   }, [campaigners]);
 
+  const opponentName = competitors[0]?.name || "Opponent";
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
@@ -925,7 +852,7 @@ export default function DashboardPage() {
               </p>
 
               <h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:mt-3 sm:text-4xl md:text-5xl">
-                Path to Victory
+                Dashboard
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm text-slate-300 sm:mt-3 sm:text-base">
@@ -1022,37 +949,53 @@ export default function DashboardPage() {
 
             <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 rounded-2xl bg-slate-950/30 p-3 sm:hidden">
               <CompactMetric
-                label="Confirmed"
-                value={formatNumber(stats.confirmed)}
-                tone="green"
+                label="Our Projected"
+                value={formatNumber(stats.projectedVotes)}
+                tone="blue"
               />
 
               <CompactMetric
-                label="Need"
-                value={formatNumber(stats.votesNeededFromProjected)}
-                tone={stats.votesNeededFromProjected > 0 ? "red" : "green"}
-              />
-
-              <CompactMetric
-                label="Opponent"
-                value={formatNumber(competitorStats.competitorTotal)}
+                label={opponentName}
+                value={formatNumber(stats.opponentEstimate)}
                 tone="red"
               />
 
               <CompactMetric
                 label="Margin"
                 value={
-                  competitorStats.margin >= 0
-                    ? `+${formatNumber(competitorStats.margin)}`
-                    : `-${formatNumber(Math.abs(competitorStats.margin))}`
+                  stats.raceMargin >= 0
+                    ? `+${formatNumber(stats.raceMargin)}`
+                    : `-${formatNumber(Math.abs(stats.raceMargin))}`
                 }
-                tone={competitorStats.margin >= 0 ? "green" : "red"}
+                tone={stats.raceMargin >= 0 ? "green" : "red"}
+              />
+
+              <CompactMetric
+                label="Not Voted"
+                value={formatNumber(stats.confirmedNotVoted)}
+                tone="amber"
               />
             </div>
 
+            <div className="mt-3 rounded-2xl bg-slate-950/30 p-3 text-sm text-slate-200">
+              <span className="font-black text-white">Race comparison:</span>{" "}
+              Our projected {formatNumber(stats.projectedVotes)} vs.{" "}
+              {opponentName} {formatNumber(stats.opponentEstimate)}. Margin:{" "}
+              <span
+                className={
+                  stats.raceMargin >= 0 ? "font-black text-green-300" : "font-black text-red-300"
+                }
+              >
+                {stats.raceMargin >= 0
+                  ? `+${formatNumber(stats.raceMargin)}`
+                  : `-${formatNumber(Math.abs(stats.raceMargin))}`}
+              </span>
+            </div>
+
             <p className="mt-3 hidden text-xs text-slate-400 sm:block">
-              Projection uses confirmed supporters plus 50% of leaning
-              supporters. This is an estimate, not a record of how anyone voted.
+              Our projection uses confirmed supporters plus 50% of leaning
+              supporters. Opponent estimate is tallied from voters marked Not
+              Supporting. This is not a record of how anyone voted.
             </p>
           </div>
 
@@ -1084,21 +1027,25 @@ export default function DashboardPage() {
             />
 
             <DesktopStatCard
-              title="Top Competitor"
-              value={formatNumber(competitorStats.competitorTotal)}
+              title={`${opponentName} Estimate`}
+              value={formatNumber(stats.opponentEstimate)}
               tone="red"
-              subtitle={competitorStats.top?.name || "No competitor estimate set."}
+              subtitle="Tallied from voters marked Not Supporting."
             />
 
             <DesktopStatCard
               title="Race Margin"
               value={
-                competitorStats.margin >= 0
-                  ? `+${formatNumber(competitorStats.margin)}`
-                  : `-${formatNumber(Math.abs(competitorStats.margin))}`
+                stats.raceMargin >= 0
+                  ? `+${formatNumber(stats.raceMargin)}`
+                  : `-${formatNumber(Math.abs(stats.raceMargin))}`
               }
-              tone={competitorStats.margin >= 0 ? "green" : "red"}
-              subtitle={competitorStats.raceStatus.description}
+              tone={stats.raceMargin >= 0 ? "green" : "red"}
+              subtitle={
+                stats.raceMargin >= 0
+                  ? "Our projection is ahead."
+                  : `${opponentName} estimate is ahead.`
+              }
             />
           </div>
         </div>
@@ -1155,6 +1102,12 @@ export default function DashboardPage() {
                 />
 
                 <CompactMetric
+                  label="Not Supporting"
+                  value={formatNumber(stats.notSupporting)}
+                  tone="red"
+                />
+
+                <CompactMetric
                   label="Undecided"
                   value={formatNumber(stats.undecided)}
                   tone="purple"
@@ -1194,6 +1147,13 @@ export default function DashboardPage() {
                   value={formatNumber(stats.unknown)}
                   subtitle="Needs classification."
                   tone="slate"
+                />
+
+                <DesktopStatCard
+                  title="Not Supporting"
+                  value={formatNumber(stats.notSupporting)}
+                  subtitle={`Tallied as ${opponentName} support estimate.`}
+                  tone="red"
                 />
 
                 <DesktopStatCard
@@ -1242,73 +1202,6 @@ export default function DashboardPage() {
               </div>
             </section>
           </div>
-
-          <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
-            <SectionHeader
-              title="Competitor Watch"
-              subtitle="Compare our projection against competitor estimates entered in Campaign Setup."
-              action={
-                <Link
-                  href="/campaign-setup"
-                  className="hidden rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-bold text-slate-700 hover:bg-slate-50 sm:block"
-                >
-                  Update Competitors
-                </Link>
-              }
-            />
-
-            <div className="mt-3 divide-y divide-slate-100 sm:hidden">
-              <CompactMetric
-                label="Top Competitor"
-                value={competitorStats.top?.name || "None"}
-                tone="red"
-              />
-
-              <CompactMetric
-                label="Competitor Estimate"
-                value={formatNumber(competitorStats.competitorTotal)}
-                tone="red"
-              />
-
-              <CompactMetric
-                label="Our Projection"
-                value={formatNumber(stats.projectedVotes)}
-                tone="blue"
-              />
-
-              <CompactMetric
-                label="Race Margin"
-                value={
-                  competitorStats.margin >= 0
-                    ? `+${formatNumber(competitorStats.margin)}`
-                    : `-${formatNumber(Math.abs(competitorStats.margin))}`
-                }
-                tone={competitorStats.margin >= 0 ? "green" : "red"}
-              />
-            </div>
-
-            <div className="mt-6 hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-              {competitorStats.totals.slice(0, 4).map((competitor) => (
-                <DesktopStatCard
-                  key={competitor.id}
-                  title={competitor.name}
-                  value={formatNumber(competitor.total)}
-                  tone="red"
-                  subtitle={
-                    competitor.id === competitorStats.top?.id
-                      ? "Top competitor estimate"
-                      : "Competitor estimate"
-                  }
-                />
-              ))}
-
-              {competitorStats.totals.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-4">
-                  No competitor data entered yet. Add competitors and vote estimates in Campaign Setup.
-                </div>
-              )}
-            </div>
-          </section>
 
           <section className="mt-4 rounded-3xl bg-white p-4 shadow sm:mt-6 sm:p-6">
             <SectionHeader
@@ -1367,7 +1260,7 @@ export default function DashboardPage() {
                         Opp.
                       </p>
                       <p className="text-lg font-black text-red-700">
-                        {formatNumber(competitorStats.topByZone.get(item.zone) || 0)}
+                        {formatNumber(item.opponent)}
                       </p>
                     </div>
 
@@ -1377,14 +1270,12 @@ export default function DashboardPage() {
                       </p>
                       <p
                         className={`text-lg font-black ${
-                          item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
-                            ? "text-green-700"
-                            : "text-red-700"
+                          item.margin >= 0 ? "text-green-700" : "text-red-700"
                         }`}
                       >
-                        {item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
-                          ? `+${formatNumber(item.projected - (competitorStats.topByZone.get(item.zone) || 0))}`
-                          : `-${formatNumber(Math.abs(item.projected - (competitorStats.topByZone.get(item.zone) || 0)))}`}
+                        {item.margin >= 0
+                          ? `+${formatNumber(item.margin)}`
+                          : `-${formatNumber(Math.abs(item.margin))}`}
                       </p>
                     </div>
                   </div>
@@ -1399,7 +1290,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-6 hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1050px] text-left text-sm">
                 <thead>
                   <tr className="border-b bg-slate-50 text-slate-600">
                     <th className="p-3">Zone</th>
@@ -1407,7 +1298,7 @@ export default function DashboardPage() {
                     <th className="p-3">Confirmed</th>
                     <th className="p-3">Leaning</th>
                     <th className="p-3">Projected</th>
-                    <th className="p-3">Competitor</th>
+                    <th className="p-3">Opponent</th>
                     <th className="p-3">Margin</th>
                     <th className="p-3">Confirmed Voted</th>
                     <th className="p-3">Confirmed Remaining</th>
@@ -1440,19 +1331,17 @@ export default function DashboardPage() {
                       </td>
 
                       <td className="p-3 font-bold text-red-700">
-                        {formatNumber(competitorStats.topByZone.get(item.zone) || 0)}
+                        {formatNumber(item.opponent)}
                       </td>
 
                       <td
                         className={`p-3 font-black ${
-                          item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
-                            ? "text-green-700"
-                            : "text-red-700"
+                          item.margin >= 0 ? "text-green-700" : "text-red-700"
                         }`}
                       >
-                        {item.projected - (competitorStats.topByZone.get(item.zone) || 0) >= 0
-                          ? `+${formatNumber(item.projected - (competitorStats.topByZone.get(item.zone) || 0))}`
-                          : `-${formatNumber(Math.abs(item.projected - (competitorStats.topByZone.get(item.zone) || 0)))}`}
+                        {item.margin >= 0
+                          ? `+${formatNumber(item.margin)}`
+                          : `-${formatNumber(Math.abs(item.margin))}`}
                       </td>
 
                       <td className="p-3 text-slate-700">

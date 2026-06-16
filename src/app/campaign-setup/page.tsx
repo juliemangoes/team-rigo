@@ -39,15 +39,6 @@ type Competitor = {
   display_order: number | null;
 };
 
-type CompetitorEstimate = {
-  id: string;
-  competitor_id: string | null;
-  zone: string | null;
-  polling_area: string | null;
-  estimated_votes: number | null;
-  notes: string | null;
-};
-
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value || 0);
 }
@@ -88,9 +79,6 @@ export default function CampaignSetupPage() {
   const [zones, setZones] = useState<CampaignZone[]>([]);
   const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [competitorEstimates, setCompetitorEstimates] = useState<
-    CompetitorEstimate[]
-  >([]);
 
   const [electionName, setElectionName] = useState("");
   const [voteTarget, setVoteTarget] = useState("");
@@ -104,18 +92,13 @@ export default function CampaignSetupPage() {
   const [pollingLocation, setPollingLocation] = useState("");
   const [pollingOrder, setPollingOrder] = useState("");
 
-  const [competitorName, setCompetitorName] = useState("");
-  const [competitorDescription, setCompetitorDescription] = useState("");
-  const [competitorOrder, setCompetitorOrder] = useState("");
-
-  const [estimateCompetitorId, setEstimateCompetitorId] = useState("");
-  const [estimateZone, setEstimateZone] = useState("");
-  const [estimatePollingArea, setEstimatePollingArea] = useState("");
-  const [estimateVotes, setEstimateVotes] = useState("");
-  const [estimateNotes, setEstimateNotes] = useState("");
+  const [opponentName, setOpponentName] = useState("");
+  const [opponentDescription, setOpponentDescription] = useState("");
+  const [opponentOrder, setOpponentOrder] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [savingOpponent, setSavingOpponent] = useState(false);
   const [message, setMessage] = useState("");
 
   const canAccess = profile?.role === "Campaign Manager";
@@ -163,7 +146,6 @@ export default function CampaignSetupPage() {
       loadZones(),
       loadPollingAreas(),
       loadCompetitors(),
-      loadCompetitorEstimates(),
     ]);
 
     setLoading(false);
@@ -234,27 +216,20 @@ export default function CampaignSetupPage() {
       return;
     }
 
-    setCompetitors(data || []);
+    const loadedCompetitors = data || [];
+    const firstOpponent = loadedCompetitors[0];
 
-    if (!estimateCompetitorId && data && data.length > 0) {
-      setEstimateCompetitorId(data[0].id);
+    setCompetitors(loadedCompetitors);
+
+    if (firstOpponent) {
+      setOpponentName(firstOpponent.name || "");
+      setOpponentDescription(firstOpponent.description || "");
+      setOpponentOrder(String(firstOpponent.display_order || ""));
+    } else {
+      setOpponentName("");
+      setOpponentDescription("");
+      setOpponentOrder("");
     }
-  }
-
-  async function loadCompetitorEstimates() {
-    const { data, error } = await supabase
-      .from("competitor_estimates")
-      .select("id, competitor_id, zone, polling_area, estimated_votes, notes")
-      .order("zone", { ascending: true, nullsFirst: false })
-      .order("polling_area", { ascending: true, nullsFirst: false });
-
-    if (error) {
-      console.error("Competitor estimates error:", error);
-      setCompetitorEstimates([]);
-      return;
-    }
-
-    setCompetitorEstimates(data || []);
   }
 
   async function saveSettings() {
@@ -380,149 +355,87 @@ export default function CampaignSetupPage() {
     await loadPollingAreas();
   }
 
-  async function addCompetitor() {
-    if (!competitorName.trim()) {
-      alert("Enter competitor name.");
+  async function saveOpponent() {
+    if (!opponentName.trim()) {
+      alert("Enter the opponent name.");
       return;
     }
 
-    const { error } = await supabase.from("competitors").insert({
-      name: competitorName.trim(),
-      description: competitorDescription.trim() || null,
-      display_order: cleanNumber(competitorOrder),
-      updated_at: new Date().toISOString(),
-    });
+    setSavingOpponent(true);
+    setMessage("");
 
-    if (error) {
-      console.error("Add competitor error:", error);
-      setMessage(error.message || "Error adding competitor.");
-      return;
+    const firstOpponent = competitors[0];
+
+    if (firstOpponent) {
+      const { error } = await supabase
+        .from("competitors")
+        .update({
+          name: opponentName.trim(),
+          description: opponentDescription.trim() || null,
+          display_order: cleanNumber(opponentOrder),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", firstOpponent.id);
+
+      if (error) {
+        console.error("Save opponent error:", error);
+        setMessage(error.message || "Error saving opponent.");
+        setSavingOpponent(false);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("competitors").insert({
+        name: opponentName.trim(),
+        description: opponentDescription.trim() || null,
+        display_order: cleanNumber(opponentOrder),
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        console.error("Save opponent error:", error);
+        setMessage(error.message || "Error saving opponent.");
+        setSavingOpponent(false);
+        return;
+      }
     }
 
-    setCompetitorName("");
-    setCompetitorDescription("");
-    setCompetitorOrder("");
-    setMessage("Competitor added.");
+    setMessage("Opponent saved.");
     await loadCompetitors();
+    setSavingOpponent(false);
   }
 
-  async function deleteCompetitor(competitor: Competitor) {
-    const confirmed = confirm(
-      `Delete competitor "${competitor.name}"? This will also delete their estimates.`
-    );
+  async function deleteOpponent() {
+    const firstOpponent = competitors[0];
+
+    if (!firstOpponent) return;
+
+    const confirmed = confirm(`Delete opponent "${firstOpponent.name}"?`);
 
     if (!confirmed) return;
 
     const { error } = await supabase
       .from("competitors")
       .delete()
-      .eq("id", competitor.id);
+      .eq("id", firstOpponent.id);
 
     if (error) {
-      console.error("Delete competitor error:", error);
-      setMessage(error.message || "Error deleting competitor.");
+      console.error("Delete opponent error:", error);
+      setMessage(error.message || "Error deleting opponent.");
       return;
     }
 
-    setMessage("Competitor deleted.");
-    await Promise.all([loadCompetitors(), loadCompetitorEstimates()]);
+    setMessage("Opponent deleted.");
+    await loadCompetitors();
   }
-
-  async function addCompetitorEstimate() {
-    if (!estimateCompetitorId) {
-      alert("Select a competitor.");
-      return;
-    }
-
-    const voteNumber = cleanNumber(estimateVotes);
-
-    if (voteNumber <= 0) {
-      alert("Enter estimated votes greater than 0.");
-      return;
-    }
-
-    const { error } = await supabase.from("competitor_estimates").insert({
-      competitor_id: estimateCompetitorId,
-      zone: estimateZone.trim() || null,
-      polling_area: estimatePollingArea.trim() || null,
-      estimated_votes: voteNumber,
-      notes: estimateNotes.trim() || null,
-      updated_at: new Date().toISOString(),
-    });
-
-    if (error) {
-      console.error("Add competitor estimate error:", error);
-      setMessage(error.message || "Error adding competitor estimate.");
-      return;
-    }
-
-    setEstimateZone("");
-    setEstimatePollingArea("");
-    setEstimateVotes("");
-    setEstimateNotes("");
-    setMessage("Competitor estimate added.");
-    await loadCompetitorEstimates();
-  }
-
-  async function deleteCompetitorEstimate(estimate: CompetitorEstimate) {
-    const confirmed = confirm("Delete this competitor estimate?");
-
-    if (!confirmed) return;
-
-    const { error } = await supabase
-      .from("competitor_estimates")
-      .delete()
-      .eq("id", estimate.id);
-
-    if (error) {
-      console.error("Delete competitor estimate error:", error);
-      setMessage(error.message || "Error deleting competitor estimate.");
-      return;
-    }
-
-    setMessage("Competitor estimate deleted.");
-    await loadCompetitorEstimates();
-  }
-
-  const competitorNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-
-    competitors.forEach((competitor) => {
-      map.set(competitor.id, competitor.name);
-    });
-
-    return map;
-  }, [competitors]);
-
-  const competitorTotals = useMemo(() => {
-    return competitors
-      .map((competitor) => {
-        const total = competitorEstimates
-          .filter((estimate) => estimate.competitor_id === competitor.id)
-          .reduce((sum, estimate) => sum + (estimate.estimated_votes || 0), 0);
-
-        return {
-          id: competitor.id,
-          name: competitor.name,
-          description: competitor.description,
-          total,
-        };
-      })
-      .sort((a, b) => b.total - a.total);
-  }, [competitors, competitorEstimates]);
 
   const setupSummary = useMemo(() => {
     return {
       voteTarget: settings?.vote_target_to_win || 0,
       zones: zones.length,
       pollingAreas: pollingAreas.length,
-      competitors: competitors.length,
-      competitorEstimateTotal: competitorEstimates.reduce(
-        (sum, estimate) => sum + (estimate.estimated_votes || 0),
-        0
-      ),
+      opponent: competitors[0]?.name || "Not set",
     };
-  }, [settings, zones, pollingAreas, competitors, competitorEstimates]);
+  }, [settings, zones, pollingAreas, competitors]);
 
   if (loading) {
     return (
@@ -577,8 +490,7 @@ export default function CampaignSetupPage() {
               </h1>
 
               <p className="mt-2 text-sm text-slate-300 sm:text-base">
-                Manage victory target, zones, polling areas, and competitor
-                estimates.
+                Manage victory target, zones, polling areas, and opponent name.
               </p>
             </div>
 
@@ -590,7 +502,7 @@ export default function CampaignSetupPage() {
             </button>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-2xl bg-white/10 p-3">
               <p className="text-xs text-slate-300">Vote Target</p>
               <p className="mt-1 text-2xl font-black">
@@ -613,16 +525,9 @@ export default function CampaignSetupPage() {
             </div>
 
             <div className="rounded-2xl bg-white/10 p-3">
-              <p className="text-xs text-slate-300">Competitors</p>
-              <p className="mt-1 text-2xl font-black">
-                {formatNumber(setupSummary.competitors)}
-              </p>
-            </div>
-
-            <div className="col-span-2 rounded-2xl bg-white/10 p-3 sm:col-span-1">
-              <p className="text-xs text-slate-300">Opp. Estimate</p>
-              <p className="mt-1 text-2xl font-black">
-                {formatNumber(setupSummary.competitorEstimateTotal)}
+              <p className="text-xs text-slate-300">Opponent</p>
+              <p className="mt-1 truncate text-2xl font-black">
+                {setupSummary.opponent}
               </p>
             </div>
           </div>
@@ -673,6 +578,73 @@ export default function CampaignSetupPage() {
             >
               {savingSettings ? "Saving..." : "Save Victory Settings"}
             </button>
+          </section>
+
+          <section className="mt-5 rounded-3xl bg-white p-4 shadow sm:p-6">
+            <SectionHeader
+              title="Opponent Setup"
+              subtitle="Only the opponent name is stored here. Opponent totals are automatically tallied from voters marked Not Supporting."
+            />
+
+            <div className="mt-5 grid gap-4 md:grid-cols-4">
+              <div>
+                <InputLabel>Opponent Name</InputLabel>
+                <input
+                  value={opponentName}
+                  onChange={(event) => setOpponentName(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                  placeholder="Opponent"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <InputLabel>Description / Party</InputLabel>
+                <input
+                  value={opponentDescription}
+                  onChange={(event) =>
+                    setOpponentDescription(event.target.value)
+                  }
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div>
+                <InputLabel>Order</InputLabel>
+                <input
+                  type="number"
+                  value={opponentOrder}
+                  onChange={(event) => setOpponentOrder(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                onClick={saveOpponent}
+                disabled={savingOpponent}
+                className="rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {savingOpponent ? "Saving..." : "Save Opponent"}
+              </button>
+
+              {competitors[0] && (
+                <button
+                  onClick={deleteOpponent}
+                  className="rounded-2xl border border-red-300 px-5 py-3 font-black text-red-700 hover:bg-red-50"
+                >
+                  Delete Opponent
+                </button>
+              )}
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+              The opponent vote estimate on the dashboard will come from the
+              number of voters whose support status is marked as{" "}
+              <span className="font-black">Not Supporting</span>.
+            </div>
           </section>
 
           <div className="mt-5 grid gap-5 xl:grid-cols-2">
@@ -823,215 +795,6 @@ export default function CampaignSetupPage() {
               </div>
             </section>
           </div>
-
-          <section className="mt-5 rounded-3xl bg-white p-4 shadow sm:p-6">
-            <SectionHeader
-              title="Competitor Data"
-              subtitle="Enter aggregate competitor vote estimates by zone or polling area. Do not record how any individual voted."
-            />
-
-            <div className="mt-5 grid gap-4 xl:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 p-4">
-                <h3 className="text-lg font-black text-slate-900">
-                  Add Competitor
-                </h3>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                  <input
-                    value={competitorName}
-                    onChange={(event) => setCompetitorName(event.target.value)}
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    placeholder="Competitor name"
-                  />
-
-                  <input
-                    value={competitorDescription}
-                    onChange={(event) =>
-                      setCompetitorDescription(event.target.value)
-                    }
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700 sm:col-span-2"
-                    placeholder="Description"
-                  />
-
-                  <input
-                    type="number"
-                    value={competitorOrder}
-                    onChange={(event) => setCompetitorOrder(event.target.value)}
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    placeholder="Order"
-                  />
-                </div>
-
-                <button
-                  onClick={addCompetitor}
-                  className="mt-4 rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800"
-                >
-                  Add Competitor
-                </button>
-
-                <div className="mt-5 space-y-3">
-                  {competitorTotals.map((competitor) => (
-                    <div
-                      key={competitor.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-black text-slate-900">
-                          {competitor.name}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          Estimate total: {formatNumber(competitor.total)}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() =>
-                          deleteCompetitor({
-                            id: competitor.id,
-                            name: competitor.name,
-                            description: competitor.description,
-                            display_order: 0,
-                          })
-                        }
-                        className="shrink-0 rounded-xl border border-red-300 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ))}
-
-                  {competitorTotals.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                      No competitors added yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 p-4">
-                <h3 className="text-lg font-black text-slate-900">
-                  Add Competitor Estimate
-                </h3>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <select
-                    value={estimateCompetitorId}
-                    onChange={(event) =>
-                      setEstimateCompetitorId(event.target.value)
-                    }
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  >
-                    <option value="">Select competitor</option>
-                    {competitors.map((competitor) => (
-                      <option key={competitor.id} value={competitor.id}>
-                        {competitor.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    type="number"
-                    value={estimateVotes}
-                    onChange={(event) => setEstimateVotes(event.target.value)}
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                    placeholder="Estimated votes"
-                  />
-
-                  <select
-                    value={estimateZone}
-                    onChange={(event) => setEstimateZone(event.target.value)}
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  >
-                    <option value="">Overall / no specific zone</option>
-                    {zones.map((zone) => (
-                      <option key={zone.id} value={zone.name}>
-                        {zone.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={estimatePollingArea}
-                    onChange={(event) =>
-                      setEstimatePollingArea(event.target.value)
-                    }
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
-                  >
-                    <option value="">No specific polling area</option>
-                    {pollingAreas.map((area) => (
-                      <option key={area.id} value={area.code}>
-                        {area.code} {area.name ? `- ${area.name}` : ""}
-                      </option>
-                    ))}
-                  </select>
-
-                  <textarea
-                    value={estimateNotes}
-                    onChange={(event) => setEstimateNotes(event.target.value)}
-                    className="rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700 sm:col-span-2"
-                    placeholder="Notes"
-                    rows={3}
-                  />
-                </div>
-
-                <button
-                  onClick={addCompetitorEstimate}
-                  className="mt-4 rounded-2xl bg-blue-700 px-5 py-3 font-black text-white hover:bg-blue-800"
-                >
-                  Add Estimate
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <h3 className="text-lg font-black text-slate-900">
-                Competitor Estimates
-              </h3>
-
-              <div className="mt-3 grid gap-3">
-                {competitorEstimates.map((estimate) => (
-                  <div
-                    key={estimate.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-black text-slate-900">
-                        {estimate.competitor_id
-                          ? competitorNameMap.get(estimate.competitor_id) ||
-                            "Competitor"
-                          : "Competitor"}
-                      </p>
-
-                      <p className="text-sm text-slate-500">
-                        {estimate.zone || "Overall"} ·{" "}
-                        {estimate.polling_area || "No polling area"} ·{" "}
-                        {formatNumber(estimate.estimated_votes || 0)} votes
-                      </p>
-
-                      {estimate.notes && (
-                        <p className="mt-1 text-sm text-slate-500">
-                          {estimate.notes}
-                        </p>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => deleteCompetitorEstimate(estimate)}
-                      className="w-fit shrink-0 rounded-xl border border-red-300 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-
-                {competitorEstimates.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                    No competitor estimates added yet.
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
         </div>
       </section>
     </main>
