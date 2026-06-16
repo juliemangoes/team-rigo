@@ -22,6 +22,21 @@ type Campaigner = {
   role: string | null;
 };
 
+type CampaignZone = {
+  id: string;
+  name: string;
+  description: string | null;
+  display_order: number | null;
+};
+
+type PollingArea = {
+  id: string;
+  code: string;
+  name: string | null;
+  location: string | null;
+  display_order: number | null;
+};
+
 type CampaignerRelation =
   | {
       id: string;
@@ -133,6 +148,8 @@ function normalizeVoter(item: RawVoter): Voter {
 export default function VotersPage() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
+  const [campaignZones, setCampaignZones] = useState<CampaignZone[]>([]);
+  const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
   const [voters, setVoters] = useState<Voter[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -155,6 +172,8 @@ export default function VotersPage() {
 
   const [manageVoter, setManageVoter] = useState<Voter | null>(null);
   const [manageContact, setManageContact] = useState("");
+  const [manageZone, setManageZone] = useState("");
+  const [managePollingArea, setManagePollingArea] = useState("");
   const [manageNotes, setManageNotes] = useState("");
   const [managePickupStatus, setManagePickupStatus] = useState("");
 
@@ -229,6 +248,32 @@ export default function VotersPage() {
       setCampaigners([]);
     } else {
       setCampaigners(campaignerData || []);
+    }
+
+    const { data: zoneData, error: zoneError } = await supabase
+      .from("campaign_zones")
+      .select("id, name, description, display_order")
+      .order("display_order", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (zoneError) {
+      console.error("Campaign setup zones error:", zoneError);
+      setCampaignZones([]);
+    } else {
+      setCampaignZones(zoneData || []);
+    }
+
+    const { data: pollingData, error: pollingError } = await supabase
+      .from("polling_areas")
+      .select("id, code, name, location, display_order")
+      .order("display_order", { ascending: true })
+      .order("code", { ascending: true });
+
+    if (pollingError) {
+      console.error("Campaign setup polling areas error:", pollingError);
+      setPollingAreas([]);
+    } else {
+      setPollingAreas(pollingData || []);
     }
 
     setLoading(false);
@@ -366,6 +411,10 @@ export default function VotersPage() {
   const zoneOptions = useMemo(() => {
     const zones = new Set<string>();
 
+    campaignZones.forEach((zone) => {
+      if (zone.name) zones.add(zone.name);
+    });
+
     campaigners.forEach((person) => {
       if (person.zone) zones.add(person.zone);
     });
@@ -379,7 +428,30 @@ export default function VotersPage() {
     }
 
     return Array.from(zones).sort();
-  }, [campaigners, voters, profile]);
+  }, [campaignZones, campaigners, voters, profile]);
+
+  const pollingAreaOptions = useMemo(() => {
+    const areas = new Set<string>();
+
+    pollingAreas.forEach((area) => {
+      if (area.code) areas.add(area.code);
+    });
+
+    voters.forEach((voter) => {
+      if (voter.polling_area) areas.add(voter.polling_area);
+      if (voter.polling_station) areas.add(voter.polling_station);
+    });
+
+    return Array.from(areas).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [pollingAreas, voters]);
+
+  function getPollingAreaLabel(code: string) {
+    const area = pollingAreas.find((item) => item.code === code);
+
+    if (!area) return code;
+
+    return area.name ? `${area.code} - ${area.name}` : area.code;
+  }
 
   const pageStats = useMemo(() => {
     return {
@@ -476,6 +548,8 @@ export default function VotersPage() {
   function openManageModal(voter: Voter) {
     setManageVoter(voter);
     setManageContact(voter.contact_no || voter.phone || "");
+    setManageZone(voter.zone || "");
+    setManagePollingArea(voter.polling_area || voter.polling_station || "");
     setManageNotes(voter.notes || "");
     setManagePickupStatus(voter.pickup_status || "Not Contacted");
   }
@@ -486,6 +560,9 @@ export default function VotersPage() {
     await updateVoter(manageVoter.id, {
       contact_no: manageContact.trim() || null,
       phone: manageContact.trim() || null,
+      zone: manageZone || null,
+      polling_area: managePollingArea || null,
+      polling_station: managePollingArea || null,
       notes: manageNotes.trim() || null,
       pickup_status: managePickupStatus || "Not Contacted",
     });
@@ -549,7 +626,7 @@ export default function VotersPage() {
                 ? `Zone Leader view. You are seeing voters allowed for your assigned zone: ${
                     profile.zone || "No zone assigned"
                   }.`
-                : "Manage voter assignments, support status, and pickup details."}
+                : "Manage voter assignments, support status, pickup details, zones, and polling areas from Campaign Setup."}
             </p>
           </div>
 
@@ -670,9 +747,11 @@ export default function VotersPage() {
                 className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
               >
                 <option>All</option>
-                <option>39</option>
-                <option>40</option>
-                <option>41</option>
+                {pollingAreaOptions.map((area) => (
+                  <option key={area} value={area}>
+                    {getPollingAreaLabel(area)}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1125,6 +1204,46 @@ export default function VotersPage() {
                     className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
                     placeholder="Contact number"
                   />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Zone
+                    </label>
+                    <select
+                      value={manageZone}
+                      onChange={(event) => setManageZone(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                    >
+                      <option value="">No zone</option>
+                      {zoneOptions.map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Polling Area
+                    </label>
+                    <select
+                      value={managePollingArea}
+                      onChange={(event) =>
+                        setManagePollingArea(event.target.value)
+                      }
+                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none focus:border-blue-700"
+                    >
+                      <option value="">No polling area</option>
+                      {pollingAreaOptions.map((area) => (
+                        <option key={area} value={area}>
+                          {getPollingAreaLabel(area)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
