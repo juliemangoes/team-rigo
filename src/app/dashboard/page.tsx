@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -82,13 +81,11 @@ type ZoneSummary = {
   leaning: number;
   ourProjected: number;
   opponentProjected: number;
-  undecided: number;
-  unknownOther: number;
+  undecidedUnknown: number;
   margin: number;
   liveOur: number;
   liveOpponent: number;
   liveUndecided: number;
-  confirmedVoted: number;
   confirmedRemaining: number;
   pickupNeeded: number;
   pickupIssues: number;
@@ -112,14 +109,16 @@ type CampaignerSummary = {
   pickupNeeded: number;
 };
 
-type VerdictTone = "green" | "amber" | "orange" | "red" | "slate";
+type Tone = "blue" | "green" | "red" | "amber" | "orange" | "purple" | "slate";
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(Math.round(value) || 0);
 }
 
 function formatSigned(value: number) {
-  return value >= 0 ? `+${formatNumber(value)}` : `-${formatNumber(Math.abs(value))}`;
+  return value >= 0
+    ? `+${formatNumber(value)}`
+    : `-${formatNumber(Math.abs(value))}`;
 }
 
 function percentage(value: number, total: number) {
@@ -146,10 +145,6 @@ function getRegNo(voter: IssueVoter) {
   return voter.voter_reg_no || voter.voter_number || "No reg no.";
 }
 
-function isOurSupport(status: string | null) {
-  return status === "Confirmed Supporter" || status === "Leaning Supporter";
-}
-
 function isConfirmedSupport(status: string | null) {
   return status === "Confirmed Supporter";
 }
@@ -158,166 +153,158 @@ function isLeaningSupport(status: string | null) {
   return status === "Leaning Supporter";
 }
 
+function isOurSupport(status: string | null) {
+  return isConfirmedSupport(status) || isLeaningSupport(status);
+}
+
 function isOpponentSupport(status: string | null) {
   return status === "Not Supporting";
 }
 
-function isUndecidedSupport(status: string | null) {
-  return status === "Undecided";
+function isUndecidedOrUnknown(status: string | null) {
+  return !status || status === "Unknown" || status === "Undecided";
 }
 
-function isUnknownStatus(status: string | null) {
-  return !status || status === "Unknown";
-}
-
-function getVerdict(
-  ourProjected: number,
+function getWinStatus(
+  projected: number,
   confirmed: number,
-  opponentProjected: number,
+  opponent: number,
   target: number
-): { label: string; description: string; tone: VerdictTone } {
+) {
   if (!target || target <= 0) {
     return {
-      label: "Set Target",
-      description: "Enter the vote target in Campaign Setup to activate the win status.",
-      tone: "slate",
+      label: "Target Needed",
+      description: "Set the vote target in Campaign Setup.",
+      tone: "slate" as Tone,
     };
   }
 
-  const margin = ourProjected - opponentProjected;
-  const progress = ourProjected / target;
+  const margin = projected - opponent;
+  const progress = projected / target;
 
   if (confirmed >= target && margin > 0) {
     return {
-      label: "Winning",
-      description: "Confirmed supporters already clear the target and lead the opponent.",
-      tone: "green",
+      label: "Strong",
+      description: "Confirmed support is above the target.",
+      tone: "green" as Tone,
     };
   }
 
   if (progress >= 1 && margin > 0) {
     return {
       label: "Ahead",
-      description: "Projected support clears the target and leads the opponent.",
-      tone: "green",
+      description: "Projected support is above target and ahead of opponent.",
+      tone: "green" as Tone,
     };
   }
 
-  if (progress >= 1 && margin <= 0) {
+  if (progress >= 0.9 && margin >= 0) {
     return {
-      label: "Contested",
-      description: "The target is in reach, but the opponent estimate is too close.",
-      tone: "amber",
+      label: "Close",
+      description: "Near the target. Keep confirming and turning out supporters.",
+      tone: "amber" as Tone,
     };
   }
 
-  if (progress >= 0.9) {
-    return {
-      label: "Tossup",
-      description: "Close to the target. Confirming support and turnout now matters.",
-      tone: "amber",
-    };
-  }
-
-  if (progress >= 0.75) {
+  if (margin < 0) {
     return {
       label: "Behind",
-      description: "Below the target. More confirmed supporters are needed.",
-      tone: "orange",
+      description: "Opponent estimate is ahead. Review support and field follow-up.",
+      tone: "red" as Tone,
     };
   }
 
   return {
-    label: "Critical",
-    description: "Well below the target. Field follow-up should be prioritized.",
-    tone: "red",
+    label: "Needs Work",
+    description: "Below target. More confirmed supporters are needed.",
+    tone: "orange" as Tone,
   };
 }
 
-function toneClasses(tone: VerdictTone) {
+function toneClasses(tone: Tone) {
+  if (tone === "blue") {
+    return {
+      border: "border-blue-100",
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      pill: "bg-blue-100 text-blue-800",
+      bar: "bg-blue-600",
+    };
+  }
+
   if (tone === "green") {
     return {
-      card: "border-green-200 bg-green-50",
-      badge: "bg-green-100 text-green-800",
+      border: "border-green-100",
+      bg: "bg-green-50",
       text: "text-green-700",
-    };
-  }
-
-  if (tone === "amber") {
-    return {
-      card: "border-amber-200 bg-amber-50",
-      badge: "bg-amber-100 text-amber-800",
-      text: "text-amber-700",
-    };
-  }
-
-  if (tone === "orange") {
-    return {
-      card: "border-orange-200 bg-orange-50",
-      badge: "bg-orange-100 text-orange-800",
-      text: "text-orange-700",
+      pill: "bg-green-100 text-green-800",
+      bar: "bg-green-600",
     };
   }
 
   if (tone === "red") {
     return {
-      card: "border-red-200 bg-red-50",
-      badge: "bg-red-100 text-red-800",
+      border: "border-red-100",
+      bg: "bg-red-50",
       text: "text-red-700",
+      pill: "bg-red-100 text-red-800",
+      bar: "bg-red-600",
+    };
+  }
+
+  if (tone === "amber") {
+    return {
+      border: "border-amber-100",
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      pill: "bg-amber-100 text-amber-800",
+      bar: "bg-amber-500",
+    };
+  }
+
+  if (tone === "orange") {
+    return {
+      border: "border-orange-100",
+      bg: "bg-orange-50",
+      text: "text-orange-700",
+      pill: "bg-orange-100 text-orange-800",
+      bar: "bg-orange-500",
+    };
+  }
+
+  if (tone === "purple") {
+    return {
+      border: "border-purple-100",
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      pill: "bg-purple-100 text-purple-800",
+      bar: "bg-purple-600",
     };
   }
 
   return {
-    card: "border-slate-200 bg-slate-50",
-    badge: "bg-slate-100 text-slate-800",
+    border: "border-slate-200",
+    bg: "bg-white",
     text: "text-slate-700",
+    pill: "bg-slate-100 text-slate-800",
+    bar: "bg-slate-600",
   };
 }
 
-function useCountUp(target: number, duration = 700) {
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    if (!Number.isFinite(target)) {
-      setValue(0);
-      return;
-    }
-
-    const reducedMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-    if (reducedMotion) {
-      setValue(target);
-      return;
-    }
-
-    let frame = 0;
-    const start = performance.now();
-
-    function tick(now: number) {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-
-      setValue(Math.round(target * eased));
-
-      if (progress < 1) {
-        frame = requestAnimationFrame(tick);
-      }
-    }
-
-    frame = requestAnimationFrame(tick);
-
-    return () => cancelAnimationFrame(frame);
-  }, [target, duration]);
-
-  return value;
-}
-
-function CountUp({ value }: { value: number }) {
-  const display = useCountUp(value);
-
-  return <span className="tabular-nums">{formatNumber(display)}</span>;
+function PageCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 ${className}`}
+    >
+      {children}
+    </section>
+  );
 }
 
 function SectionHeader({
@@ -326,16 +313,16 @@ function SectionHeader({
   action,
 }: {
   title: string;
-  subtitle: string;
-  action?: ReactNode;
+  subtitle?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h2 className="break-words text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+        <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
           {title}
         </h2>
-        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
 
       {action && <div className="shrink-0">{action}</div>}
@@ -343,41 +330,28 @@ function SectionHeader({
   );
 }
 
-function StatCard({
-  title,
+function MiniStat({
+  label,
   value,
-  subtitle,
+  detail,
   tone = "slate",
 }: {
-  title: string;
+  label: string;
   value: string | number;
-  subtitle?: string;
-  tone?: "blue" | "green" | "red" | "amber" | "orange" | "purple" | "slate";
+  detail?: string;
+  tone?: Tone;
 }) {
-  const color =
-    tone === "blue"
-      ? "text-blue-700 bg-blue-50 border-blue-100"
-      : tone === "green"
-      ? "text-green-700 bg-green-50 border-green-100"
-      : tone === "red"
-      ? "text-red-700 bg-red-50 border-red-100"
-      : tone === "amber"
-      ? "text-amber-700 bg-amber-50 border-amber-100"
-      : tone === "orange"
-      ? "text-orange-700 bg-orange-50 border-orange-100"
-      : tone === "purple"
-      ? "text-purple-700 bg-purple-50 border-purple-100"
-      : "text-slate-700 bg-white border-slate-200";
+  const t = toneClasses(tone);
 
   return (
-    <div className={`rounded-3xl border p-4 shadow-sm ${color}`}>
-      <p className="text-xs font-black uppercase tracking-wide opacity-70">
-        {title}
+    <div className={`rounded-3xl border p-4 ${t.border} ${t.bg}`}>
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
       </p>
-      <p className="mt-2 text-3xl font-black tracking-tight">
-        {typeof value === "number" ? <CountUp value={value} /> : value}
+      <p className={`mt-2 text-2xl font-black tracking-tight ${t.text}`}>
+        {value}
       </p>
-      {subtitle && <p className="mt-1 text-xs font-semibold opacity-75">{subtitle}</p>}
+      {detail && <p className="mt-1 text-xs font-semibold text-slate-500">{detail}</p>}
     </div>
   );
 }
@@ -405,52 +379,42 @@ function ActionChip({
   );
 }
 
-function SegmentedBar({
-  ourPct,
-  contestedPct,
-  opponentPct,
-  winPct,
-  showWinLine,
+function ProjectedBar({
+  our,
+  undecided,
+  opponent,
+  total,
+  target,
 }: {
-  ourPct: number;
-  contestedPct: number;
-  opponentPct: number;
-  winPct: number;
-  showWinLine: boolean;
+  our: number;
+  undecided: number;
+  opponent: number;
+  total: number;
+  target: number;
 }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setMounted(true));
-
-    return () => cancelAnimationFrame(frame);
-  }, []);
+  const safeTotal = Math.max(total, our + undecided + opponent, 1);
+  const ourWidth = clampPercentage((our / safeTotal) * 100);
+  const undecidedWidth = clampPercentage((undecided / safeTotal) * 100);
+  const opponentWidth = clampPercentage((opponent / safeTotal) * 100);
+  const targetWidth =
+    target > 0 && safeTotal > 0 ? clampPercentage((target / safeTotal) * 100) : 0;
 
   return (
-    <div className={`relative ${showWinLine ? "pt-6" : ""}`}>
-      <div className="flex h-6 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
-        <div
-          className="h-6 bg-blue-600 transition-[width] duration-700"
-          style={{ width: `${mounted ? clampPercentage(ourPct) : 0}%` }}
-        />
-        <div
-          className="h-6 bg-amber-400 transition-[width] duration-700"
-          style={{ width: `${mounted ? clampPercentage(contestedPct) : 0}%` }}
-        />
-        <div
-          className="h-6 bg-red-600 transition-[width] duration-700"
-          style={{ width: `${mounted ? clampPercentage(opponentPct) : 0}%` }}
-        />
+    <div className={`${target > 0 ? "pt-6" : ""} relative`}>
+      <div className="flex h-5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+        <div className="h-5 bg-blue-600" style={{ width: `${ourWidth}%` }} />
+        <div className="h-5 bg-amber-400" style={{ width: `${undecidedWidth}%` }} />
+        <div className="h-5 bg-red-600" style={{ width: `${opponentWidth}%` }} />
       </div>
 
-      {showWinLine && (
+      {target > 0 && (
         <div
-          className="pointer-events-none absolute bottom-0 top-6 z-10"
-          style={{ left: `${clampPercentage(winPct)}%` }}
+          className="absolute bottom-0 top-6"
+          style={{ left: `${targetWidth}%` }}
         >
-          <div className="h-full w-0.5 -translate-x-1/2 bg-slate-950 shadow" />
-          <span className="absolute -top-6 left-0 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-950 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white">
-            Win Line
+          <div className="h-full w-0.5 -translate-x-1/2 bg-slate-950" />
+          <span className="absolute -top-6 left-0 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-950 px-2 py-1 text-[10px] font-black text-white">
+            Target
           </span>
         </div>
       )}
@@ -458,43 +422,35 @@ function SegmentedBar({
   );
 }
 
-function LiveComparisonBar({
+function LiveBar({
   label,
   value,
   total,
-  tone,
   remaining,
+  tone,
 }: {
   label: string;
   value: number;
   total: number;
-  tone: "blue" | "red" | "amber";
   remaining: number;
+  tone: Tone;
 }) {
-  const color =
-    tone === "blue"
-      ? "bg-blue-600 text-blue-700"
-      : tone === "red"
-      ? "bg-red-600 text-red-700"
-      : "bg-amber-500 text-amber-700";
-
+  const t = toneClasses(tone);
   const width = clampPercentage(percentage(value, total));
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-black text-slate-900">{label}</span>
-        <span className={`font-black ${color.split(" ")[1]}`}>
-          {formatNumber(value)}
-        </span>
+    <div className="rounded-2xl border border-slate-200 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-black text-slate-900">{label}</p>
+        <p className={`font-black ${t.text}`}>{formatNumber(value)}</p>
       </div>
 
-      <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100">
-        <div className={`h-3 rounded-full ${color.split(" ")[0]}`} style={{ width: `${width}%` }} />
+      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-2.5 rounded-full ${t.bar}`} style={{ width: `${width}%` }} />
       </div>
 
-      <p className="mt-1 text-xs font-semibold text-slate-400">
-        Remaining in group: {formatNumber(remaining)}
+      <p className="mt-2 text-xs font-semibold text-slate-500">
+        Remaining: {formatNumber(remaining)}
       </p>
     </div>
   );
@@ -698,32 +654,16 @@ export default function DashboardPage() {
     const leaning = voters.filter((voter) =>
       isLeaningSupport(voter.support_status)
     ).length;
-    const undecided = voters.filter((voter) =>
-      isUndecidedSupport(voter.support_status)
-    ).length;
-    const unknown = voters.filter((voter) =>
-      isUnknownStatus(voter.support_status)
-    ).length;
-    const doNotContact = voters.filter(
-      (voter) => voter.support_status === "Do Not Contact"
-    ).length;
-
-    const opponentProjected = voters.filter((voter) =>
+    const opponent = voters.filter((voter) =>
       isOpponentSupport(voter.support_status)
     ).length;
-
-    const ourProjected = Math.round(confirmed + leaning * 0.5);
-    const undecidedUnknown = undecided + unknown;
-    const unknownOther = Math.max(
-      0,
-      total - confirmed - leaning - opponentProjected - undecided
-    );
-    const contestedProjected = Math.max(0, total - ourProjected - opponentProjected);
-    const margin = ourProjected - opponentProjected;
-
-    const confirmedVoted = voters.filter(
-      (voter) => voter.voted && isConfirmedSupport(voter.support_status)
+    const undecidedUnknown = voters.filter((voter) =>
+      isUndecidedOrUnknown(voter.support_status)
     ).length;
+
+    const projected = Math.round(confirmed + leaning * 0.5);
+    const margin = projected - opponent;
+
     const ourVoted = voters.filter(
       (voter) => voter.voted && isOurSupport(voter.support_status)
     ).length;
@@ -753,6 +693,9 @@ export default function DashboardPage() {
     const confirmedRemaining = voters.filter(
       (voter) => !voter.voted && isConfirmedSupport(voter.support_status)
     ).length;
+    const confirmedVoted = voters.filter(
+      (voter) => voter.voted && isConfirmedSupport(voter.support_status)
+    ).length;
     const confirmedPickupNotVoted = voters.filter(
       (voter) =>
         !voter.voted &&
@@ -760,72 +703,50 @@ export default function DashboardPage() {
         isConfirmedSupport(voter.support_status)
     ).length;
 
-    const votedComparisonTotal = ourVoted + opponentVoted + undecidedVoted;
+    const liveTotal = ourVoted + opponentVoted + undecidedVoted;
+
     const pickupIssues = voters.filter(
       (voter) => voter.pickup_status === "Issue"
     ).length;
     const assigned = voters.filter((voter) => voter.campaigner_id).length;
     const unassigned = total - assigned;
 
-    const targetProgress = percentage(ourProjected, target);
-    const assignmentRate = percentage(assigned, total);
-    const confirmedTurnoutRate = percentage(confirmedVoted, confirmed);
-    const votesNeededFromProjected = Math.max(0, target - ourProjected);
-    const votesNeededFromConfirmed = Math.max(0, target - confirmed);
-
-    const verdict = getVerdict(
-      ourProjected,
-      confirmed,
-      opponentProjected,
-      target
-    );
+    const winStatus = getWinStatus(projected, confirmed, opponent, target);
 
     return {
       total,
       target,
       confirmed,
       leaning,
-      undecided,
-      unknown,
-      doNotContact,
-      opponentProjected,
-      ourProjected,
+      opponent,
       undecidedUnknown,
-      unknownOther,
-      contestedProjected,
+      projected,
       margin,
-      confirmedVoted,
       ourVoted,
       opponentVoted,
       undecidedVoted,
       ourRemaining,
       opponentRemaining,
       undecidedRemaining,
+      liveTotal,
       confirmedRemaining,
+      confirmedVoted,
       confirmedPickupNotVoted,
-      votedComparisonTotal,
       pickupIssues,
       assigned,
       unassigned,
-      targetProgress,
-      assignmentRate,
-      confirmedTurnoutRate,
-      votesNeededFromProjected,
-      votesNeededFromConfirmed,
-      confirmedCushion: confirmed - target,
-      projectedCushion: ourProjected - target,
-      ourPct: total > 0 ? (ourProjected / total) * 100 : 0,
-      opponentPct: total > 0 ? (opponentProjected / total) * 100 : 0,
-      contestedPct: total > 0 ? (contestedProjected / total) * 100 : 0,
-      winPct: target > 0 && total > 0 ? (target / total) * 100 : 0,
-      verdict,
+      assignmentRate: percentage(assigned, total),
+      turnoutRate: percentage(confirmedVoted, confirmed),
+      votesNeeded: Math.max(0, target - projected),
+      projectedCushion: projected - target,
+      winStatus,
     };
   }, [voters, settings]);
 
   const zoneSummary = useMemo(() => {
     const map = new Map<string, ZoneSummary>();
 
-    function blank(zone: string): ZoneSummary {
+    function emptyZone(zone: string): ZoneSummary {
       return {
         zone,
         total: 0,
@@ -833,13 +754,11 @@ export default function DashboardPage() {
         leaning: 0,
         ourProjected: 0,
         opponentProjected: 0,
-        undecided: 0,
-        unknownOther: 0,
+        undecidedUnknown: 0,
         margin: 0,
         liveOur: 0,
         liveOpponent: 0,
         liveUndecided: 0,
-        confirmedVoted: 0,
         confirmedRemaining: 0,
         pickupNeeded: 0,
         pickupIssues: 0,
@@ -847,14 +766,14 @@ export default function DashboardPage() {
     }
 
     setupZones.forEach((zone) => {
-      map.set(zone.name, blank(zone.name));
+      map.set(zone.name, emptyZone(zone.name));
     });
 
     voters.forEach((voter) => {
       const zone = voter.zone || "No Zone";
 
       if (!map.has(zone)) {
-        map.set(zone, blank(zone));
+        map.set(zone, emptyZone(zone));
       }
 
       const item = map.get(zone)!;
@@ -863,42 +782,17 @@ export default function DashboardPage() {
 
       if (isConfirmedSupport(voter.support_status)) {
         item.confirmed += 1;
-
-        if (voter.voted) {
-          item.confirmedVoted += 1;
-        } else {
-          item.confirmedRemaining += 1;
-        }
+        if (!voter.voted) item.confirmedRemaining += 1;
       }
 
-      if (isLeaningSupport(voter.support_status)) {
-        item.leaning += 1;
-      }
+      if (isLeaningSupport(voter.support_status)) item.leaning += 1;
+      if (isOpponentSupport(voter.support_status)) item.opponentProjected += 1;
+      if (isUndecidedOrUnknown(voter.support_status)) item.undecidedUnknown += 1;
 
-      if (isOpponentSupport(voter.support_status)) {
-        item.opponentProjected += 1;
-      }
-
-      if (isUndecidedSupport(voter.support_status)) {
-        item.undecided += 1;
-      }
-
-      if (
-        !isOurSupport(voter.support_status) &&
-        !isOpponentSupport(voter.support_status) &&
-        !isUndecidedSupport(voter.support_status)
-      ) {
-        item.unknownOther += 1;
-      }
-
-      if (voter.voted && isOurSupport(voter.support_status)) {
-        item.liveOur += 1;
-      }
-
+      if (voter.voted && isOurSupport(voter.support_status)) item.liveOur += 1;
       if (voter.voted && isOpponentSupport(voter.support_status)) {
         item.liveOpponent += 1;
       }
-
       if (
         voter.voted &&
         !isOurSupport(voter.support_status) &&
@@ -991,14 +885,12 @@ export default function DashboardPage() {
         };
       })
       .sort((a, b) => b.confirmed - a.confirmed)
-      .slice(0, 10);
+      .slice(0, 8);
   }, [campaigners, voters]);
 
   const teamStats = useMemo(() => {
     return {
       total: campaigners.length,
-      managers: campaigners.filter((person) => person.role === "Campaign Manager")
-        .length,
       zoneLeaders: campaigners.filter((person) => person.role === "Zone Leader")
         .length,
       campaigners: campaigners.filter((person) => person.role === "Campaigner")
@@ -1011,8 +903,8 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+        <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
           <h1 className="mt-5 text-lg font-black text-slate-900">
             Loading dashboard...
@@ -1024,8 +916,8 @@ export default function DashboardPage() {
 
   if (profile?.role !== "Campaign Manager") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4 sm:p-6">
-        <div className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-6">
+        <div className="w-full max-w-xl rounded-3xl bg-white p-6 text-center shadow-sm sm:p-8">
           <h1 className="text-2xl font-black text-slate-900">
             Campaign Manager Access Only
           </h1>
@@ -1037,14 +929,14 @@ export default function DashboardPage() {
     );
   }
 
-  const verdictStyle = toneClasses(stats.verdict.tone);
+  const winTone = toneClasses(stats.winStatus.tone);
   const electionName = settings?.election_name || `${OUR_NAME} Campaign`;
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950">
-      <section className="border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-8">
+    <main className="min-h-screen overflow-x-hidden bg-slate-100">
+      <section className="bg-white px-4 py-5 shadow-sm sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
                 Dashboard
@@ -1054,25 +946,25 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 xl:flex">
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0">
               <button
                 onClick={loadDashboard}
                 disabled={refreshing}
-                className="shrink-0 rounded-full bg-slate-950 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-2xl sm:px-5 sm:py-3"
+                className="shrink-0 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {refreshing ? "Refreshing..." : "Refresh"}
               </button>
 
               <Link
                 href="/campaign-setup"
-                className="shrink-0 rounded-full border border-slate-300 bg-white px-4 py-2 text-center text-sm font-black text-slate-800 hover:bg-slate-50 sm:rounded-2xl sm:px-5 sm:py-3"
+                className="shrink-0 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 hover:bg-slate-50"
               >
                 Setup
               </Link>
 
               <Link
                 href="/voters"
-                className="shrink-0 rounded-full bg-blue-700 px-4 py-2 text-center text-sm font-black text-white hover:bg-blue-800 sm:rounded-2xl sm:px-5 sm:py-3"
+                className="shrink-0 rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
               >
                 Voters
               </Link>
@@ -1085,92 +977,63 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {stats.target <= 0 && (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
-              Vote target is not set. Open Campaign Setup and enter the Vote
-              Target to Win to activate the win status.
-            </div>
-          )}
-
-          <div className={`mt-5 rounded-3xl border p-5 shadow-sm sm:p-6 ${verdictStyle.card}`}>
-            <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                  Win Status
-                </p>
-
-                <h2 className={`mt-2 text-4xl font-black tracking-tight sm:text-6xl ${verdictStyle.text}`}>
-                  {stats.verdict.label}
-                </h2>
-
-                <p className="mt-2 max-w-xl text-sm font-semibold text-slate-600">
-                  {stats.verdict.description}
-                </p>
-              </div>
-
-              <div className="rounded-3xl bg-white p-4 text-left shadow-sm lg:min-w-[260px] lg:text-right">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                  Projected Margin
-                </p>
-
-                <p
-                  className={`mt-2 text-4xl font-black ${
-                    stats.margin >= 0 ? "text-green-700" : "text-red-700"
-                  }`}
-                >
-                  {formatSigned(stats.margin)}
-                </p>
-
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {stats.projectedCushion >= 0
-                    ? `${formatNumber(stats.projectedCushion)} over target`
-                    : `${formatNumber(stats.votesNeededFromProjected)} short of target`}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+            <PageCard>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Projected Position
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                    Win Status
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Blue = {OUR_NAME}, amber = undecided/unknown, red ={" "}
-                    {opponentName}.
+
+                  <h2 className={`mt-2 text-4xl font-black ${winTone.text}`}>
+                    {stats.winStatus.label}
+                  </h2>
+
+                  <p className="mt-2 max-w-xl text-sm font-semibold text-slate-600">
+                    {stats.winStatus.description}
                   </p>
                 </div>
 
-                <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-                  Target: {formatNumber(stats.target)}
-                </span>
+                <div className={`rounded-3xl border p-4 ${winTone.border} ${winTone.bg}`}>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Margin
+                  </p>
+                  <p
+                    className={`mt-2 text-3xl font-black ${
+                      stats.margin >= 0 ? "text-green-700" : "text-red-700"
+                    }`}
+                  >
+                    {formatSigned(stats.margin)}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    Projected vs {opponentName}
+                  </p>
+                </div>
               </div>
 
-              <div className="mt-5">
-                <SegmentedBar
-                  ourPct={stats.ourPct}
-                  contestedPct={stats.contestedPct}
-                  opponentPct={stats.opponentPct}
-                  winPct={stats.winPct}
-                  showWinLine={stats.target > 0}
+              <div className="mt-6">
+                <ProjectedBar
+                  our={stats.projected}
+                  undecided={stats.undecidedUnknown}
+                  opponent={stats.opponent}
+                  total={stats.total}
+                  target={stats.target}
                 />
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs sm:gap-3">
-                <div className="rounded-2xl bg-blue-50 p-3 text-blue-800">
-                  <p className="font-black">{formatNumber(stats.ourProjected)}</p>
-                  <p className="mt-0.5 font-semibold">Team Rigo projected</p>
-                </div>
-
-                <div className="rounded-2xl bg-amber-50 p-3 text-amber-800">
-                  <p className="font-black">{formatNumber(stats.contestedProjected)}</p>
-                  <p className="mt-0.5 font-semibold">Undecided / unknown</p>
-                </div>
-
-                <div className="rounded-2xl bg-red-50 p-3 text-red-800">
-                  <p className="font-black">{formatNumber(stats.opponentProjected)}</p>
-                  <p className="mt-0.5 font-semibold">{opponentName}</p>
-                </div>
+              <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-slate-500">
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-blue-600" />
+                  {OUR_NAME}: {formatNumber(stats.projected)}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-amber-400" />
+                  Undecided/Unknown: {formatNumber(stats.undecidedUnknown)}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-red-600" />
+                  {opponentName}: {formatNumber(stats.opponent)}
+                </span>
               </div>
 
               <p className="mt-4 text-xs text-slate-500">
@@ -1178,192 +1041,38 @@ export default function DashboardPage() {
                 Opponent estimate = voters marked Not Supporting. This is an
                 operational estimate, not a record of how anyone voted.
               </p>
+            </PageCard>
+
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat
+                label="Target"
+                value={formatNumber(stats.target)}
+                detail="Votes to win"
+                tone="slate"
+              />
+              <MiniStat
+                label="Projected"
+                value={formatNumber(stats.projected)}
+                detail={
+                  stats.votesNeeded > 0
+                    ? `${formatNumber(stats.votesNeeded)} short`
+                    : "At or above target"
+                }
+                tone="blue"
+              />
+              <MiniStat
+                label="Confirmed"
+                value={formatNumber(stats.confirmed)}
+                detail={`${formatNumber(stats.leaning)} leaning`}
+                tone="green"
+              />
+              <MiniStat
+                label="Opponent"
+                value={formatNumber(stats.opponent)}
+                detail="Not Supporting"
+                tone="red"
+              />
             </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <SectionHeader
-                title="Projected Voter Position"
-                subtitle="Before voting starts, this is the campaign position."
-              />
-
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-3 font-black sm:px-4">Group</th>
-                      <th className="px-3 py-3 text-right font-black sm:px-4">
-                        Confirmed
-                      </th>
-                      <th className="px-3 py-3 text-right font-black sm:px-4">
-                        Leaning
-                      </th>
-                      <th className="px-3 py-3 text-right font-black sm:px-4">
-                        Projected
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-100">
-                    <tr>
-                      <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
-                        {OUR_NAME}
-                      </td>
-                      <td className="px-3 py-3 text-right font-bold text-green-700 sm:px-4">
-                        {formatNumber(stats.confirmed)}
-                      </td>
-                      <td className="px-3 py-3 text-right font-bold text-blue-700 sm:px-4">
-                        {formatNumber(stats.leaning)}
-                      </td>
-                      <td className="px-3 py-3 text-right font-black text-blue-700 sm:px-4">
-                        {formatNumber(stats.ourProjected)}
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
-                        {opponentName}
-                      </td>
-                      <td className="px-3 py-3 text-right font-bold text-red-700 sm:px-4">
-                        {formatNumber(stats.opponentProjected)}
-                      </td>
-                      <td className="px-3 py-3 text-right font-bold text-slate-400 sm:px-4">
-                        —
-                      </td>
-                      <td className="px-3 py-3 text-right font-black text-red-700 sm:px-4">
-                        {formatNumber(stats.opponentProjected)}
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td className="px-3 py-3 font-black text-slate-900 sm:px-4">
-                        Undecided / Unknown
-                      </td>
-                      <td className="px-3 py-3 text-right font-bold text-amber-700 sm:px-4">
-                        {formatNumber(stats.undecidedUnknown)}
-                      </td>
-                      <td className="px-3 py-3 text-right font-bold text-slate-400 sm:px-4">
-                        —
-                      </td>
-                      <td className="px-3 py-3 text-right font-black text-amber-700 sm:px-4">
-                        {formatNumber(stats.undecidedUnknown)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <SectionHeader
-                title="Voting Started Comparison"
-                subtitle="Once scrutineers mark voters, this shows turnout by support group."
-              />
-
-              <div className="mt-5 space-y-5">
-                <LiveComparisonBar
-                  label={OUR_NAME}
-                  value={stats.ourVoted}
-                  total={stats.votedComparisonTotal}
-                  tone="blue"
-                  remaining={stats.ourRemaining}
-                />
-
-                <LiveComparisonBar
-                  label={opponentName}
-                  value={stats.opponentVoted}
-                  total={stats.votedComparisonTotal}
-                  tone="red"
-                  remaining={stats.opponentRemaining}
-                />
-
-                <LiveComparisonBar
-                  label="Undecided / Unknown"
-                  value={stats.undecidedVoted}
-                  total={stats.votedComparisonTotal}
-                  tone="amber"
-                  remaining={stats.undecidedRemaining}
-                />
-              </div>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-slate-600">
-                    Total marked voted
-                  </span>
-                  <span className="font-black text-slate-950">
-                    {formatNumber(stats.votedComparisonTotal)}
-                  </span>
-                </div>
-
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="font-bold text-slate-600">
-                    Confirmed supporters still left
-                  </span>
-                  <span className="font-black text-amber-700">
-                    {formatNumber(stats.confirmedRemaining)}
-                  </span>
-                </div>
-              </div>
-
-              <p className="mt-4 text-xs text-slate-500">
-                The live comparison uses support status plus the scrutineer voted
-                marker. It is not a record of anyone’s private ballot.
-              </p>
-            </section>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-            <StatCard
-              title="Confirmed"
-              value={stats.confirmed}
-              tone="green"
-              subtitle={
-                stats.votesNeededFromConfirmed > 0
-                  ? `${formatNumber(stats.votesNeededFromConfirmed)} needed`
-                  : "Target cleared"
-              }
-            />
-
-            <StatCard
-              title="Projected"
-              value={stats.ourProjected}
-              tone="blue"
-              subtitle={
-                stats.votesNeededFromProjected > 0
-                  ? `${formatNumber(stats.votesNeededFromProjected)} short`
-                  : "At or above target"
-              }
-            />
-
-            <StatCard
-              title="Opponent"
-              value={stats.opponentProjected}
-              tone="red"
-              subtitle="From Not Supporting"
-            />
-
-            <StatCard
-              title="Unassigned"
-              value={stats.unassigned}
-              tone={stats.unassigned > 0 ? "red" : "green"}
-              subtitle="No campaigner"
-            />
-
-            <StatCard
-              title="Pickup Issues"
-              value={stats.pickupIssues}
-              tone={stats.pickupIssues > 0 ? "red" : "green"}
-              subtitle="Needs action"
-            />
-
-            <StatCard
-              title="Assignment"
-              value={`${stats.assignmentRate}%`}
-              tone="purple"
-              subtitle={`${formatNumber(stats.assigned)} of ${formatNumber(stats.total)}`}
-            />
           </div>
         </div>
       </section>
@@ -1378,10 +1087,180 @@ export default function DashboardPage() {
             <ActionChip href="/campaign-setup" label="Setup" />
           </div>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <PageCard>
+              <SectionHeader
+                title="Projected Voter Position"
+                subtitle="Before voting starts, this is the support position."
+              />
+
+              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-3 font-black">Group</th>
+                      <th className="px-3 py-3 text-right font-black">
+                        Confirmed
+                      </th>
+                      <th className="px-3 py-3 text-right font-black">
+                        Leaning
+                      </th>
+                      <th className="px-3 py-3 text-right font-black">
+                        Projected
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    <tr>
+                      <td className="px-3 py-3 font-black text-slate-900">
+                        {OUR_NAME}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-green-700">
+                        {formatNumber(stats.confirmed)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-blue-700">
+                        {formatNumber(stats.leaning)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-black text-blue-700">
+                        {formatNumber(stats.projected)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-3 py-3 font-black text-slate-900">
+                        {opponentName}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-red-700">
+                        {formatNumber(stats.opponent)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-slate-400">
+                        —
+                      </td>
+                      <td className="px-3 py-3 text-right font-black text-red-700">
+                        {formatNumber(stats.opponent)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-3 py-3 font-black text-slate-900">
+                        Undecided / Unknown
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-amber-700">
+                        {formatNumber(stats.undecidedUnknown)}
+                      </td>
+                      <td className="px-3 py-3 text-right font-bold text-slate-400">
+                        —
+                      </td>
+                      <td className="px-3 py-3 text-right font-black text-amber-700">
+                        {formatNumber(stats.undecidedUnknown)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </PageCard>
+
+            <PageCard>
+              <SectionHeader
+                title="Voting Started Comparison"
+                subtitle="Visible when scrutineers start marking voters."
+              />
+
+              <div className="mt-4 grid gap-3">
+                <LiveBar
+                  label={OUR_NAME}
+                  value={stats.ourVoted}
+                  total={stats.liveTotal}
+                  remaining={stats.ourRemaining}
+                  tone="blue"
+                />
+                <LiveBar
+                  label={opponentName}
+                  value={stats.opponentVoted}
+                  total={stats.liveTotal}
+                  remaining={stats.opponentRemaining}
+                  tone="red"
+                />
+                <LiveBar
+                  label="Undecided / Unknown"
+                  value={stats.undecidedVoted}
+                  total={stats.liveTotal}
+                  remaining={stats.undecidedRemaining}
+                  tone="amber"
+                />
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-bold text-slate-600">
+                    Total marked voted
+                  </span>
+                  <span className="font-black text-slate-950">
+                    {formatNumber(stats.liveTotal)}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                  <span className="font-bold text-slate-600">
+                    Confirmed supporters still left
+                  </span>
+                  <span className="font-black text-amber-700">
+                    {formatNumber(stats.confirmedRemaining)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-slate-500">
+                This uses support status plus the voted marker. It is not a
+                record of anyone’s private ballot.
+              </p>
+            </PageCard>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <MiniStat
+              label="Confirmed Left"
+              value={formatNumber(stats.confirmedRemaining)}
+              detail="Not yet marked voted"
+              tone="amber"
+            />
+            <MiniStat
+              label="Turnout"
+              value={`${stats.turnoutRate}%`}
+              detail={`${formatNumber(stats.confirmedVoted)} confirmed voted`}
+              tone="green"
+            />
+            <MiniStat
+              label="Pickup Not Voted"
+              value={formatNumber(stats.confirmedPickupNotVoted)}
+              detail="Confirmed supporters"
+              tone="orange"
+            />
+            <MiniStat
+              label="Pickup Issues"
+              value={formatNumber(stats.pickupIssues)}
+              detail="Needs action"
+              tone={stats.pickupIssues > 0 ? "red" : "green"}
+            />
+            <MiniStat
+              label="Unassigned"
+              value={formatNumber(stats.unassigned)}
+              detail="No campaigner"
+              tone={stats.unassigned > 0 ? "red" : "green"}
+            />
+            <MiniStat
+              label="Assignment"
+              value={`${stats.assignmentRate}%`}
+              detail={`${formatNumber(stats.assigned)} assigned`}
+              tone="purple"
+            />
+          </div>
+
+          <PageCard className="mt-4">
             <SectionHeader
-              title="Zone Battle Map"
-              subtitle="Support, turnout, margin and pickup risk by zone."
+              title="Zone Performance"
+              subtitle="Projected support, live turnout and risk by zone."
               action={
                 <Link
                   href="/reports"
@@ -1393,97 +1272,60 @@ export default function DashboardPage() {
             />
 
             <div className="mt-5 grid gap-3 lg:hidden">
-              {zoneSummary.map((item) => {
-                const decided =
-                  item.ourProjected + item.opponentProjected + item.undecided;
-                const ourWidth =
-                  decided > 0 ? (item.ourProjected / decided) * 100 : 0;
-                const opponentWidth =
-                  decided > 0 ? (item.opponentProjected / decided) * 100 : 0;
-                const undecidedWidth =
-                  decided > 0 ? (item.undecided / decided) * 100 : 0;
-
-                return (
-                  <div
-                    key={item.zone}
-                    className="min-w-0 rounded-3xl border border-slate-200 p-4"
-                  >
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="break-words text-base font-black text-slate-950">
-                          {item.zone}
-                        </h3>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Total: {formatNumber(item.total)}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-black ${
-                          item.margin >= 0
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {formatSigned(item.margin)}
-                      </span>
+              {zoneSummary.map((item) => (
+                <div
+                  key={item.zone}
+                  className="rounded-3xl border border-slate-200 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="break-words text-base font-black text-slate-950">
+                        {item.zone}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Total: {formatNumber(item.total)}
+                      </p>
                     </div>
 
-                    <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-3 bg-blue-600"
-                        style={{ width: `${clampPercentage(ourWidth)}%` }}
-                      />
-                      <div
-                        className="h-3 bg-amber-400"
-                        style={{ width: `${clampPercentage(undecidedWidth)}%` }}
-                      />
-                      <div
-                        className="h-3 bg-red-600"
-                        style={{ width: `${clampPercentage(opponentWidth)}%` }}
-                      />
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                        item.margin >= 0
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {formatSigned(item.margin)}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400">Us</p>
+                      <p className="text-lg font-black text-blue-700">
+                        {formatNumber(item.ourProjected)}
+                      </p>
                     </div>
-
-                    <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-                      <div>
-                        <p className="text-[11px] font-bold text-slate-400">
-                          Us
-                        </p>
-                        <p className="text-lg font-black text-blue-700">
-                          {formatNumber(item.ourProjected)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-[11px] font-bold text-slate-400">
-                          Opp.
-                        </p>
-                        <p className="text-lg font-black text-red-700">
-                          {formatNumber(item.opponentProjected)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-[11px] font-bold text-slate-400">
-                          Left
-                        </p>
-                        <p className="text-lg font-black text-amber-700">
-                          {formatNumber(item.confirmedRemaining)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-[11px] font-bold text-slate-400">
-                          Issues
-                        </p>
-                        <p className="text-lg font-black text-orange-700">
-                          {formatNumber(item.pickupIssues)}
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400">Opp.</p>
+                      <p className="text-lg font-black text-red-700">
+                        {formatNumber(item.opponentProjected)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400">Left</p>
+                      <p className="text-lg font-black text-amber-700">
+                        {formatNumber(item.confirmedRemaining)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400">Issues</p>
+                      <p className="text-lg font-black text-orange-700">
+                        {formatNumber(item.pickupIssues)}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
 
               {zoneSummary.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
@@ -1498,16 +1340,12 @@ export default function DashboardPage() {
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                     <th className="py-3 pr-3 font-black">Zone</th>
                     <th className="px-3 py-3 font-black">Total</th>
-                    <th className="px-3 py-3 font-black text-blue-700">
-                      Our projected
-                    </th>
-                    <th className="px-3 py-3 font-black text-red-700">
-                      Opponent
-                    </th>
+                    <th className="px-3 py-3 font-black text-blue-700">Projected</th>
+                    <th className="px-3 py-3 font-black text-red-700">Opponent</th>
                     <th className="px-3 py-3 font-black">Margin</th>
-                    <th className="px-3 py-3 font-black">Live us</th>
-                    <th className="px-3 py-3 font-black">Live opp.</th>
-                    <th className="px-3 py-3 font-black">Confirmed left</th>
+                    <th className="px-3 py-3 font-black">Live Us</th>
+                    <th className="px-3 py-3 font-black">Live Opp.</th>
+                    <th className="px-3 py-3 font-black">Confirmed Left</th>
                     <th className="px-3 py-3 font-black">Pickup</th>
                     <th className="px-3 py-3 font-black">Issues</th>
                   </tr>
@@ -1519,32 +1357,32 @@ export default function DashboardPage() {
                       <td className="py-3 pr-3 font-black text-slate-950">
                         {item.zone}
                       </td>
-                      <td className="px-3 py-3 tabular-nums text-slate-600">
+                      <td className="px-3 py-3 text-slate-600">
                         {formatNumber(item.total)}
                       </td>
-                      <td className="px-3 py-3 font-black tabular-nums text-blue-700">
+                      <td className="px-3 py-3 font-black text-blue-700">
                         {formatNumber(item.ourProjected)}
                       </td>
-                      <td className="px-3 py-3 font-black tabular-nums text-red-700">
+                      <td className="px-3 py-3 font-black text-red-700">
                         {formatNumber(item.opponentProjected)}
                       </td>
                       <td
-                        className={`px-3 py-3 font-black tabular-nums ${
+                        className={`px-3 py-3 font-black ${
                           item.margin >= 0 ? "text-green-700" : "text-red-700"
                         }`}
                       >
                         {formatSigned(item.margin)}
                       </td>
-                      <td className="px-3 py-3 font-bold tabular-nums text-blue-700">
+                      <td className="px-3 py-3 font-bold text-blue-700">
                         {formatNumber(item.liveOur)}
                       </td>
-                      <td className="px-3 py-3 font-bold tabular-nums text-red-700">
+                      <td className="px-3 py-3 font-bold text-red-700">
                         {formatNumber(item.liveOpponent)}
                       </td>
-                      <td className="px-3 py-3 font-bold tabular-nums text-amber-700">
+                      <td className="px-3 py-3 font-bold text-amber-700">
                         {formatNumber(item.confirmedRemaining)}
                       </td>
-                      <td className="px-3 py-3 font-bold tabular-nums text-orange-700">
+                      <td className="px-3 py-3 font-bold text-orange-700">
                         {formatNumber(item.pickupNeeded)}
                       </td>
                       <td className="px-3 py-3">
@@ -1571,23 +1409,23 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </PageCard>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mt-4 grid gap-4 xl:grid-cols-3">
+            <PageCard>
               <SectionHeader
                 title="Polling Areas"
-                subtitle="Turnout and pickup needs by polling station."
+                subtitle="Turnout by polling area."
               />
 
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
                 {pollingSummary.map((item) => {
                   const turnout = percentage(item.voted, item.total);
 
                   return (
                     <div
                       key={item.pollingArea}
-                      className="rounded-3xl border border-slate-200 p-4"
+                      className="rounded-2xl border border-slate-200 p-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -1599,15 +1437,14 @@ export default function DashboardPage() {
                             {formatNumber(item.pickupNeeded)} pickup
                           </p>
                         </div>
-
-                        <p className="shrink-0 text-2xl font-black text-green-700">
+                        <p className="text-xl font-black text-green-700">
                           {turnout}%
                         </p>
                       </div>
 
-                      <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
+                      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-100">
                         <div
-                          className="h-3 rounded-full bg-green-600"
+                          className="h-2.5 rounded-full bg-green-600"
                           style={{ width: `${clampPercentage(turnout)}%` }}
                         />
                       </div>
@@ -1621,19 +1458,19 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-            </section>
+            </PageCard>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+            <PageCard>
               <SectionHeader
                 title="Field Leaderboard"
-                subtitle="Campaigners ranked by confirmed supporters."
+                subtitle="Campaigners by confirmed supporters."
               />
 
               <div className="mt-4 space-y-3">
                 {campaignerSummary.map((item, index) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-3 rounded-3xl border border-slate-200 p-4"
+                    className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3"
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-black text-slate-700">
                       {index + 1}
@@ -1650,14 +1487,9 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    <div className="shrink-0 text-right">
-                      <p className="text-xl font-black text-blue-700">
-                        {formatNumber(item.confirmed)}
-                      </p>
-                      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                        Conf.
-                      </p>
-                    </div>
+                    <p className="shrink-0 text-xl font-black text-blue-700">
+                      {formatNumber(item.confirmed)}
+                    </p>
                   </div>
                 ))}
 
@@ -1667,112 +1499,70 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-            </section>
-          </div>
+            </PageCard>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+            <PageCard>
               <SectionHeader
-                title="Pickup Issues"
-                subtitle="Voters flagged with transport problems."
-                action={
-                  <Link
-                    href="/campaigners"
-                    className="hidden rounded-2xl border border-slate-300 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 sm:block"
-                  >
-                    Field View
-                  </Link>
-                }
+                title="Operations"
+                subtitle="Issues, team and next actions."
               />
 
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <MiniStat
+                  label="Team"
+                  value={formatNumber(teamStats.total)}
+                  detail={`${formatNumber(teamStats.campaigners)} field`}
+                  tone="slate"
+                />
+                <MiniStat
+                  label="Leaders"
+                  value={formatNumber(teamStats.zoneLeaders)}
+                  detail={`${formatNumber(teamStats.drivers)} drivers`}
+                  tone="purple"
+                />
+              </div>
+
               <div className="mt-4 space-y-3">
-                {issueVoters.map((voter) => (
+                {issueVoters.slice(0, 4).map((voter) => (
                   <div
                     key={voter.id}
-                    className="rounded-3xl border border-amber-200 bg-amber-50 p-4"
+                    className="rounded-2xl border border-amber-200 bg-amber-50 p-3"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-xs font-black uppercase tracking-wide text-amber-700">
-                          {getRegNo(voter)}
-                        </p>
-                        <p className="mt-1 truncate text-base font-black text-slate-950">
-                          {getDisplayName(voter)}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {voter.zone || "No zone"} ·{" "}
-                          {voter.polling_area || "No polling area"}
-                        </p>
-                      </div>
-
-                      <span className="shrink-0 rounded-full bg-amber-200 px-3 py-1 text-xs font-black text-amber-900">
-                        Issue
-                      </span>
-                    </div>
+                    <p className="text-xs font-black uppercase tracking-wide text-amber-700">
+                      {getRegNo(voter)}
+                    </p>
+                    <p className="mt-1 truncate font-black text-slate-950">
+                      {getDisplayName(voter)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {voter.zone || "No zone"} ·{" "}
+                      {voter.polling_area || "No polling area"}
+                    </p>
                   </div>
                 ))}
 
                 {issueVoters.length === 0 && (
-                  <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
                     No pickup issues right now.
                   </div>
                 )}
               </div>
-            </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-              <SectionHeader title="Team Roster" subtitle="Active members by role." />
-
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                {[
-                  ["Total", teamStats.total, "slate"],
-                  ["Leaders", teamStats.zoneLeaders, "purple"],
-                  ["Field", teamStats.campaigners, "green"],
-                  ["Drivers", teamStats.drivers, "amber"],
-                  ["Scrutineers", teamStats.scrutineers, "red"],
-                  ["Managers", teamStats.managers, "blue"],
-                ].map(([label, value, tone]) => (
-                  <StatCard
-                    key={String(label)}
-                    title={String(label)}
-                    value={Number(value)}
-                    tone={
-                      tone as
-                        | "blue"
-                        | "green"
-                        | "red"
-                        | "amber"
-                        | "orange"
-                        | "purple"
-                        | "slate"
-                    }
-                  />
-                ))}
+              <div className="mt-4 grid gap-2">
+                <Link
+                  href="/campaigners"
+                  className="rounded-2xl border border-slate-200 p-3 text-sm font-black text-slate-800 hover:bg-slate-50"
+                >
+                  Open Field View
+                </Link>
+                <Link
+                  href="/team"
+                  className="rounded-2xl border border-slate-200 p-3 text-sm font-black text-slate-800 hover:bg-slate-50"
+                >
+                  Manage Team
+                </Link>
               </div>
-
-              <div className="mt-5 border-t border-slate-100 pt-5">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                  Next Actions
-                </p>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {[
-                    ["Work voter support status", "/voters"],
-                    ["Open field operations", "/campaigners"],
-                    ["Manage team access", "/team"],
-                    ["Upload latest voter file", "/upload"],
-                  ].map(([label, href]) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      className="rounded-2xl border border-slate-200 p-4 text-sm font-black text-slate-800 hover:border-blue-300 hover:bg-blue-50"
-                    >
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </section>
+            </PageCard>
           </div>
         </div>
       </section>
