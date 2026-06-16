@@ -19,7 +19,7 @@ const allLinks = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/voters", label: "Voters" },
   { href: "/campaigners", label: "Campaigners" },
-  { href: "/scrutineer", label: "Scrutineer" },
+  { href: "/campaign-setup", label: "Campaign Setup" },
   { href: "/team", label: "Team Setup" },
   { href: "/upload", label: "Upload" },
   { href: "/reports", label: "Reports" },
