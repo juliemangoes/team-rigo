@@ -361,7 +361,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-blue-100 bg-blue-50 text-blue-700"
+      ? "border-sky-100 bg-sky-50 text-sky-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -396,7 +396,7 @@ function SelectField({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
     >
       {children}
     </select>
@@ -415,6 +415,7 @@ export default function ReportsPage() {
 
   const [loading, setLoading] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [message, setMessage] = useState("");
 
   const [reportType, setReportType] = useState<ReportType>("filtered");
@@ -851,191 +852,255 @@ export default function ReportsPage() {
     `;
   }
 
-  function exportPdf() {
-    const generatedAt = new Date().toLocaleString();
+  async function exportPdf() {
+    if (reportVoters.length === 0 || exportingPdf) return;
 
-    const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(selectedReport.label)} - Team Rigo Report</title>
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              font-family: Arial, Helvetica, sans-serif;
-              color: #0f172a;
-              margin: 28px;
-              line-height: 1.35;
-            }
-            .header {
-              border-bottom: 3px solid #1d4ed8;
-              padding-bottom: 14px;
-              margin-bottom: 20px;
-            }
-            .brand {
-              font-size: 12px;
-              font-weight: 900;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #1d4ed8;
-            }
-            h1 {
-              margin: 6px 0 4px;
-              font-size: 28px;
-              line-height: 1.1;
-            }
-            h2 {
-              font-size: 18px;
-              margin: 24px 0 10px;
-            }
-            .meta, .note {
-              color: #475569;
-              font-size: 12px;
-              margin: 4px 0;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 10px;
-              margin: 18px 0;
-            }
-            .stat {
-              border: 1px solid #e2e8f0;
-              border-radius: 12px;
-              padding: 10px;
-              background: #f8fafc;
-            }
-            .stat-label {
-              font-size: 10px;
-              text-transform: uppercase;
-              letter-spacing: 0.08em;
-              color: #64748b;
-              font-weight: 900;
-            }
-            .stat-value {
-              margin-top: 4px;
-              font-size: 20px;
-              font-weight: 900;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 8px;
-              page-break-inside: auto;
-              font-size: 11px;
-            }
-            tr { page-break-inside: avoid; page-break-after: auto; }
-            th {
-              text-align: left;
-              background: #eff6ff;
-              border: 1px solid #cbd5e1;
-              padding: 7px;
-              font-size: 10px;
-              text-transform: uppercase;
-            }
-            td {
-              border: 1px solid #e2e8f0;
-              padding: 7px;
-              vertical-align: top;
-            }
-            .disclaimer {
-              margin-top: 18px;
-              padding: 10px;
-              border-radius: 10px;
-              background: #fff7ed;
-              color: #9a3412;
-              font-size: 11px;
-              font-weight: 700;
-            }
-            @page { size: A4 landscape; margin: 14mm; }
-            @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="brand">Team Rigo Campaign Operations</div>
-            <h1>${escapeHtml(selectedReport.label)}</h1>
-            <p class="meta">${escapeHtml(selectedReport.description)}</p>
-            <p class="meta">Generated: ${escapeHtml(generatedAt)}</p>
-            <p class="meta">${escapeHtml(activeFilterText())}</p>
-          </div>
+    setExportingPdf(true);
+    setMessage("");
 
-          <div class="grid">
-            <div class="stat"><div class="stat-label">Total Voters</div><div class="stat-value">${formatNumber(
-              totals.total
-            )}</div></div>
-            <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-value">${formatNumber(
-              totals.confirmed
-            )}</div></div>
-            <div class="stat"><div class="stat-label">Not Supporting</div><div class="stat-value">${formatNumber(
-              totals.notSupporting
-            )}</div></div>
-            <div class="stat"><div class="stat-label">Voted</div><div class="stat-value">${formatNumber(
-              totals.voted
-            )}</div></div>
-          </div>
+    try {
+      const jspdfModule = await import("jspdf");
+      const autoTableModule = await import("jspdf-autotable");
 
-          <h2>Summary</h2>
-          ${summaryTableHtml()}
+      const JsPDFClass = jspdfModule.jsPDF;
+      const autoTable =
+        ((autoTableModule as any).default || autoTableModule) as any;
 
-          ${includeVoterList ? voterListTableHtml() : ""}
+      const doc = new JsPDFClass({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
 
-          <div class="disclaimer">
-            Reports are based on recorded campaign support status and operational voter records.
-            Voted status means a voter was marked by the election-day workflow; it is not a record of anyone's private ballot.
-          </div>
-        </body>
-      </html>
-    `;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const generatedAt = new Date().toLocaleString();
 
-    const oldFrame = document.getElementById("team-rigo-pdf-frame");
-    if (oldFrame) oldFrame.remove();
+      const safeName = selectedReport.label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
 
-    const iframe = document.createElement("iframe");
-    iframe.id = "team-rigo-pdf-frame";
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.style.visibility = "hidden";
+      doc.setProperties({
+        title: `${selectedReport.label} - Team Rigo Report`,
+        subject: activeFilterText(),
+        author: "Team Rigo",
+        creator: "Team Rigo Campaign Operations",
+      });
 
-    document.body.appendChild(iframe);
+      doc.setFillColor(15, 23, 42);
+      doc.roundedRect(32, 28, pageWidth - 64, 96, 18, 18, "F");
 
-    const frameWindow = iframe.contentWindow;
-    const frameDocument = iframe.contentDocument || frameWindow?.document;
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("TEAM RIGO CAMPAIGN OPERATIONS", 56, 56);
 
-    if (!frameWindow || !frameDocument) {
-      setMessage("Could not open the PDF print window. Try again or use Export CSV.");
-      iframe.remove();
-      return;
-    }
+      doc.setFontSize(24);
+      doc.text(selectedReport.label, 56, 86);
 
-    frameDocument.open();
-    frameDocument.write(html);
-    frameDocument.close();
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(203, 213, 225);
+      doc.text(`Generated: ${generatedAt}`, 56, 108);
 
-    const printReport = () => {
-      try {
-        frameWindow.focus();
-        frameWindow.print();
-        setMessage("PDF print window opened. Choose 'Save as PDF' as the printer/destination.");
-      } catch (error) {
-        console.error("PDF print error:", error);
-        setMessage("PDF print window could not open. Your browser may be blocking print dialogs.");
+      doc.setTextColor(15, 23, 42);
+
+      const statCards = [
+        ["Total Voters", formatNumber(totals.total)],
+        ["Confirmed", formatNumber(totals.confirmed)],
+        ["Not Supporting", formatNumber(totals.notSupporting)],
+        ["Voted", formatNumber(totals.voted)],
+        ["Unassigned", formatNumber(totals.unassigned)],
+        ["Pickup Needed", formatNumber(totals.pickupNeeded)],
+      ];
+
+      const cardTop = 146;
+      const cardGap = 10;
+      const cardWidth = (pageWidth - 64 - cardGap * 5) / 6;
+
+      statCards.forEach(([label, value], index) => {
+        const x = 32 + index * (cardWidth + cardGap);
+
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(x, cardTop, cardWidth, 54, 12, 12, "FD");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text(label.toUpperCase(), x + 10, cardTop + 18);
+
+        doc.setFontSize(16);
+        doc.setTextColor(15, 23, 42);
+        doc.text(value, x + 10, cardTop + 40);
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Summary", 32, 232);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      const filterText = activeFilterText();
+      const splitFilter = doc.splitTextToSize(filterText, pageWidth - 64);
+      doc.text(splitFilter, 32, 248);
+
+      autoTable(doc, {
+        startY: 270,
+        head: [
+          [
+            "Group",
+            "Total",
+            "Confirmed",
+            "Leaning",
+            "Not Supporting",
+            "Undecided/Unknown",
+            "Voted",
+            "Not Voted",
+            "Pickup",
+          ],
+        ],
+        body: summaryRows.map((row) => [
+          row.label,
+          row.total,
+          row.confirmed,
+          row.leaning,
+          row.notSupporting,
+          row.undecidedUnknown,
+          row.voted,
+          row.notVoted,
+          row.pickupNeeded,
+        ]),
+        theme: "grid",
+        headStyles: {
+          fillColor: [2, 132, 199],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [15, 23, 42],
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252],
+        },
+        margin: { left: 32, right: 32 },
+        styles: {
+          cellPadding: 5,
+          lineColor: [226, 232, 240],
+          lineWidth: 0.5,
+        },
+      });
+
+      if (includeVoterList) {
+        doc.addPage();
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(15, 23, 42);
+        doc.text("Voter List", 32, 42);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(71, 85, 105);
+        doc.text(
+          `Exporting ${formatNumber(reportVoters.length)} voter(s).`,
+          32,
+          58
+        );
+
+        autoTable(doc, {
+          startY: 76,
+          head: [
+            [
+              "Reg No.",
+              "Name",
+              "Zone",
+              "Polling",
+              "Support",
+              "Campaigner",
+              "Contact",
+              "Voted",
+              "Pickup",
+            ],
+          ],
+          body: reportVoters.map((voter) => [
+            getRegNo(voter),
+            getDisplayName(voter),
+            voter.zone || "No Zone",
+            getPollingArea(voter) || "No Polling",
+            getSupportLabel(voter.support_status),
+            voter.campaigners?.full_name || "Unassigned",
+            voter.contact_no || voter.phone || "",
+            voter.voted ? "Voted" : "Not Voted",
+            voter.pickup_needed ? "Needed" : "Not Needed",
+          ]),
+          theme: "grid",
+          headStyles: {
+            fillColor: [15, 23, 42],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+            fontSize: 7,
+          },
+          bodyStyles: {
+            fontSize: 7,
+            textColor: [15, 23, 42],
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252],
+          },
+          margin: { left: 24, right: 24 },
+          styles: {
+            cellPadding: 4,
+            lineColor: [226, 232, 240],
+            lineWidth: 0.4,
+            overflow: "linebreak",
+          },
+          columnStyles: {
+            0: { cellWidth: 58 },
+            1: { cellWidth: 135 },
+            2: { cellWidth: 72 },
+            3: { cellWidth: 62 },
+            4: { cellWidth: 95 },
+            5: { cellWidth: 95 },
+            6: { cellWidth: 70 },
+            7: { cellWidth: 52 },
+            8: { cellWidth: 55 },
+          },
+        });
       }
 
-      setTimeout(() => {
-        iframe.remove();
-      }, 60000);
-    };
+      const pageCount = doc.getNumberOfPages();
 
-    setTimeout(printReport, 500);
+      for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+        doc.setPage(pageNumber);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(
+          `Team Rigo Report · Page ${pageNumber} of ${pageCount}`,
+          32,
+          pageHeight - 18
+        );
+        doc.text(generatedAt, pageWidth - 32, pageHeight - 18, {
+          align: "right",
+        });
+      }
+
+      doc.save(`${safeName || "team-rigo-report"}.pdf`);
+      setMessage("PDF report downloaded.");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      setMessage(
+        "PDF export needs the PDF packages installed. Run: npm install jspdf jspdf-autotable"
+      );
+    } finally {
+      setExportingPdf(false);
+    }
   }
 
   function exportCsv() {
@@ -1089,7 +1154,7 @@ export default function ReportsPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading reports...
             </h1>
@@ -1140,7 +1205,7 @@ export default function ReportsPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
               {message}
             </div>
           )}
@@ -1209,7 +1274,7 @@ export default function ReportsPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
                     placeholder="Name, reg no., phone..."
                   />
                 </div>
@@ -1315,10 +1380,10 @@ export default function ReportsPage() {
 
                 <button
                   onClick={exportPdf}
-                  disabled={reportVoters.length === 0}
-                  className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  disabled={reportVoters.length === 0 || exportingPdf}
+                  className="rounded-2xl bg-sky-700 px-5 py-3 text-sm font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
                 >
-                  Export PDF
+                  {exportingPdf ? "Creating PDF..." : "Export PDF"}
                 </button>
               </div>
             </div>
@@ -1336,7 +1401,7 @@ export default function ReportsPage() {
               </div>
 
               {loadingReport && (
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
                   Loading...
                 </span>
               )}
@@ -1379,7 +1444,7 @@ export default function ReportsPage() {
                       <td className="px-3 py-3 font-bold text-amber-700">
                         {formatNumber(row.undecidedUnknown)}
                       </td>
-                      <td className="px-3 py-3 font-bold text-blue-700">
+                      <td className="px-3 py-3 font-bold text-sky-700">
                         {formatNumber(row.voted)}
                       </td>
                       <td className="px-3 py-3 font-bold text-slate-700">

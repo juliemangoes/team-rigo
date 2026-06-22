@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -38,6 +39,17 @@ const allLinks: NavLink[] = [
     href: "/voters",
     label: "Voters",
     description: "Voter records",
+  },
+  {
+    href: "/campaigners",
+    label: "Field View",
+    shortLabel: "Field",
+    description: "Campaigner and driver work",
+  },
+  {
+    href: "/scrutineer",
+    label: "Scrutineer",
+    description: "Election day marking",
   },
   {
     href: "/team",
@@ -116,6 +128,7 @@ export default function Navigation() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const links = useMemo(() => linksForRole(profile?.role || null), [profile]);
   const homeHref = homeForRole(profile?.role || null);
@@ -178,11 +191,47 @@ export default function Navigation() {
     return null;
   }
 
-  async function logout() {
+  async function logout(event?: MouseEvent<HTMLButtonElement>) {
+    event?.preventDefault();
+
+    if (signingOut) return;
+
+    setSigningOut(true);
     setMenuOpen(false);
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "global" });
+
+      if (error) {
+        console.error("Logout error:", error);
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      if (typeof window !== "undefined") {
+        try {
+          Object.keys(window.localStorage).forEach((key) => {
+            if (key.startsWith("sb-") && key.includes("auth-token")) {
+              window.localStorage.removeItem(key);
+            }
+          });
+
+          Object.keys(window.sessionStorage).forEach((key) => {
+            if (key.startsWith("sb-") && key.includes("auth-token")) {
+              window.sessionStorage.removeItem(key);
+            }
+          });
+        } catch (storageError) {
+          console.error("Could not clear auth storage:", storageError);
+        }
+
+        window.location.replace("/login");
+        return;
+      }
+
+      router.replace("/login");
+      router.refresh();
+    }
   }
 
   return (
@@ -250,10 +299,12 @@ export default function Navigation() {
               )}
 
               <button
+                type="button"
                 onClick={logout}
-                className="rounded-xl border border-red-200 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50"
+                disabled={signingOut}
+                className="rounded-xl border border-red-200 px-3 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Logout
+                {signingOut ? "Logging out..." : "Logout"}
               </button>
             </div>
 
@@ -386,10 +437,12 @@ export default function Navigation() {
                 </Link>
 
                 <button
+                  type="button"
                   onClick={logout}
-                  className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-sm"
+                  disabled={signingOut}
+                  className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Logout
+                  {signingOut ? "Logging out..." : "Logout"}
                 </button>
               </div>
             </div>
