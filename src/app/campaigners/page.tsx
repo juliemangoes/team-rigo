@@ -74,6 +74,18 @@ type RawVoter = Omit<Voter, "campaigners"> & {
   campaigners?: CampaignerRelation;
 };
 
+type FieldStats = {
+  loaded: number;
+  total: number;
+  confirmed: number;
+  leaning: number;
+  pickupNeeded: number;
+  issues: number;
+  onRoute: number;
+  completed: number;
+  notVoted: number;
+};
+
 const voterSelect = `
   id,
   voter_reg_no,
@@ -275,6 +287,17 @@ export default function CampaignersPage() {
   const [votedFilter, setVotedFilter] = useState("Not Voted");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [fieldStats, setFieldStats] = useState<FieldStats>({
+    loaded: 0,
+    total: 0,
+    confirmed: 0,
+    leaning: 0,
+    pickupNeeded: 0,
+    issues: 0,
+    onRoute: 0,
+    completed: 0,
+    notVoted: 0,
+  });
 
   const canAccess =
     profile?.role === "Campaign Manager" ||
@@ -377,41 +400,33 @@ export default function CampaignersPage() {
     setLoading(false);
   }
 
-  async function loadVoters() {
-    if (!profile) return;
+  function applyFieldFilters(query: any) {
+    const searchTokens = search
+      .trim()
+      .replace(/[,%()]/g, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .slice(0, 6);
 
-    setLoadingVoters(true);
-    setMessage("");
-
-    const cleanSearch = search.trim().replace(/,/g, " ");
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    let query = supabase
-      .from("voters")
-      .select(voterSelect, { count: "exact" })
-      .order("pickup_priority", { ascending: true, nullsFirst: false })
-      .order("last_name", { ascending: true, nullsFirst: false })
-      .range(from, to);
-
-    if (cleanSearch) {
+    searchTokens.forEach((token) => {
       query = query.or(
         [
-          `voter_reg_no.ilike.%${cleanSearch}%`,
-          `voter_number.ilike.%${cleanSearch}%`,
-          `full_name.ilike.%${cleanSearch}%`,
-          `first_name.ilike.%${cleanSearch}%`,
-          `middle_name.ilike.%${cleanSearch}%`,
-          `last_name.ilike.%${cleanSearch}%`,
-          `contact_no.ilike.%${cleanSearch}%`,
-          `phone.ilike.%${cleanSearch}%`,
-          `street_name.ilike.%${cleanSearch}%`,
-          `address.ilike.%${cleanSearch}%`,
-          `polling_area.ilike.%${cleanSearch}%`,
-          `zone.ilike.%${cleanSearch}%`,
+          `voter_reg_no.ilike.%${token}%`,
+          `voter_number.ilike.%${token}%`,
+          `full_name.ilike.%${token}%`,
+          `first_name.ilike.%${token}%`,
+          `middle_name.ilike.%${token}%`,
+          `last_name.ilike.%${token}%`,
+          `contact_no.ilike.%${token}%`,
+          `phone.ilike.%${token}%`,
+          `street_name.ilike.%${token}%`,
+          `address.ilike.%${token}%`,
+          `polling_area.ilike.%${token}%`,
+          `zone.ilike.%${token}%`,
         ].join(",")
       );
-    }
+    });
 
     if (isDriver) {
       query = query.eq("pickup_needed", true);
@@ -439,6 +454,90 @@ export default function CampaignersPage() {
       query = query.eq("voted", false);
     }
 
+    return query;
+  }
+
+  async function getFilteredCount(applyExtraFilter?: (query: any) => any) {
+    let query = supabase
+      .from("voters")
+      .select("id", { count: "exact", head: true });
+
+    query = applyFieldFilters(query);
+
+    if (applyExtraFilter) {
+      query = applyExtraFilter(query);
+    }
+
+    const { error, count } = await query;
+
+    if (error) throw error;
+
+    return count || 0;
+  }
+
+  async function loadFieldStats(loadedCount: number, total: number) {
+    try {
+      const [
+        confirmed,
+        leaning,
+        pickupNeeded,
+        issues,
+        onRoute,
+        completed,
+        notVoted,
+      ] = await Promise.all([
+        getFilteredCount((query) =>
+          query.eq("support_status", "Confirmed Supporter")
+        ),
+        getFilteredCount((query) =>
+          query.eq("support_status", "Leaning Supporter")
+        ),
+        getFilteredCount((query) => query.eq("pickup_needed", true)),
+        getFilteredCount((query) => query.eq("pickup_status", "Issue")),
+        getFilteredCount((query) => query.eq("pickup_status", "On Route")),
+        getFilteredCount((query) => query.eq("pickup_status", "Completed")),
+        getFilteredCount((query) => query.eq("voted", false)),
+      ]);
+
+      setFieldStats({
+        loaded: loadedCount,
+        total,
+        confirmed,
+        leaning,
+        pickupNeeded,
+        issues,
+        onRoute,
+        completed,
+        notVoted,
+      });
+    } catch (error) {
+      console.error("Field stats error:", error);
+      setFieldStats((current) => ({
+        ...current,
+        loaded: loadedCount,
+        total,
+      }));
+    }
+  }
+
+  async function loadVoters() {
+    if (!profile) return;
+
+    setLoadingVoters(true);
+    setMessage("");
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let query = supabase
+      .from("voters")
+      .select(voterSelect, { count: "exact" })
+      .order("pickup_priority", { ascending: true, nullsFirst: false })
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .range(from, to);
+
+    query = applyFieldFilters(query);
+
     const { data, error, count } = await query;
 
     if (error) {
@@ -446,14 +545,27 @@ export default function CampaignersPage() {
       setMessage(error.message || "Error loading field voters.");
       setVoters([]);
       setTotalCount(0);
+      setFieldStats({
+        loaded: 0,
+        total: 0,
+        confirmed: 0,
+        leaning: 0,
+        pickupNeeded: 0,
+        issues: 0,
+        onRoute: 0,
+        completed: 0,
+        notVoted: 0,
+      });
       setLoadingVoters(false);
       return;
     }
 
     const normalized = ((data || []) as RawVoter[]).map(normalizeVoter);
+    const nextTotal = count || 0;
 
     setVoters(normalized);
-    setTotalCount(count || 0);
+    setTotalCount(nextTotal);
+    await loadFieldStats(normalized.length, nextTotal);
     setLoadingVoters(false);
   }
 
@@ -553,31 +665,6 @@ export default function CampaignersPage() {
     await loadVoters();
   }
 
-  const pageStats = useMemo(() => {
-    const confirmed = voters.filter(
-      (voter) => voter.support_status === "Confirmed Supporter"
-    ).length;
-    const leaning = voters.filter(
-      (voter) => voter.support_status === "Leaning Supporter"
-    ).length;
-    const pickupNeeded = voters.filter((voter) => voter.pickup_needed).length;
-    const issues = voters.filter((voter) => voter.pickup_status === "Issue").length;
-    const onRoute = voters.filter((voter) => voter.pickup_status === "On Route").length;
-    const completed = voters.filter((voter) => voter.pickup_status === "Completed").length;
-    const notVoted = voters.filter((voter) => !voter.voted).length;
-
-    return {
-      loaded: voters.length,
-      confirmed,
-      leaning,
-      pickupNeeded,
-      issues,
-      onRoute,
-      completed,
-      notVoted,
-    };
-  }, [voters]);
-
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
@@ -644,39 +731,39 @@ export default function CampaignersPage() {
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             <SummaryCard
               label="Visible"
-              value={formatNumber(totalCount)}
-              detail={`Loaded ${formatNumber(pageStats.loaded)}`}
+              value={formatNumber(fieldStats.total)}
+              detail={`Loaded page ${formatNumber(fieldStats.loaded)}`}
               tone="blue"
             />
             <SummaryCard
               label="Confirmed"
-              value={formatNumber(pageStats.confirmed)}
-              detail={`${formatNumber(pageStats.leaning)} leaning`}
+              value={formatNumber(fieldStats.confirmed)}
+              detail={`${formatNumber(fieldStats.leaning)} leaning`}
               tone="green"
             />
             <SummaryCard
               label="Not Voted"
-              value={formatNumber(pageStats.notVoted)}
+              value={formatNumber(fieldStats.notVoted)}
               detail="Needs follow-up"
               tone="amber"
             />
             <SummaryCard
               label="Pickup"
-              value={formatNumber(pageStats.pickupNeeded)}
+              value={formatNumber(fieldStats.pickupNeeded)}
               detail="Needed"
               tone="purple"
             />
             <SummaryCard
               label="On Route"
-              value={formatNumber(pageStats.onRoute)}
+              value={formatNumber(fieldStats.onRoute)}
               detail="In progress"
               tone="orange"
             />
             <SummaryCard
               label="Issues"
-              value={formatNumber(pageStats.issues)}
-              detail={`${formatNumber(pageStats.completed)} completed`}
-              tone={pageStats.issues > 0 ? "red" : "green"}
+              value={formatNumber(fieldStats.issues)}
+              detail={`${formatNumber(fieldStats.completed)} completed`}
+              tone={fieldStats.issues > 0 ? "red" : "green"}
             />
           </div>
         </div>
