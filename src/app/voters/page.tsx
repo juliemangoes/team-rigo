@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const PAGE_SIZE = 50;
@@ -284,6 +284,8 @@ export default function VotersPage() {
   const [loadingVoters, setLoadingVoters] = useState(false);
   const [message, setMessage] = useState("");
 
+  const loadRequestRef = useRef(0);
+
   const [search, setSearch] = useState("");
   const [zoneFilter, setZoneFilter] = useState("All");
   const [pollingAreaFilter, setPollingAreaFilter] = useState("All");
@@ -513,7 +515,11 @@ export default function VotersPage() {
     return count || 0;
   }
 
-  async function loadVoterStats(loadedCount: number, total: number) {
+  async function loadVoterStats(
+    loadedCount: number,
+    total: number,
+    requestId: number
+  ) {
     try {
       const [
         confirmed,
@@ -537,6 +543,8 @@ export default function VotersPage() {
         getFilteredCount((query) => query.eq("voted", true)),
       ]);
 
+      if (requestId !== loadRequestRef.current) return;
+
       setVoterStats({
         loaded: loadedCount,
         total,
@@ -548,6 +556,8 @@ export default function VotersPage() {
         voted,
       });
     } catch (error) {
+      if (requestId !== loadRequestRef.current) return;
+
       console.error("Voter stats error:", error);
       setVoterStats((current) => ({
         ...current,
@@ -559,6 +569,8 @@ export default function VotersPage() {
 
   async function loadVoters() {
     if (!profile) return;
+
+    const requestId = ++loadRequestRef.current;
 
     setLoadingVoters(true);
     setMessage("");
@@ -576,6 +588,8 @@ export default function VotersPage() {
     query = applyVoterFilters(query);
 
     const { data, error, count } = await query;
+
+    if (requestId !== loadRequestRef.current) return;
 
     if (error) {
       console.error("Voters load error:", error);
@@ -602,7 +616,10 @@ export default function VotersPage() {
     setVoters(normalized);
     setTotalCount(nextTotal);
     setSelectedIds([]);
-    await loadVoterStats(normalized.length, nextTotal);
+    await loadVoterStats(normalized.length, nextTotal, requestId);
+
+    if (requestId !== loadRequestRef.current) return;
+
     setLoadingVoters(false);
   }
 
@@ -638,6 +655,7 @@ export default function VotersPage() {
   }
 
   function clearFilters() {
+    loadRequestRef.current += 1;
     setSearch("");
     setZoneFilter("All");
     setPollingAreaFilter("All");
