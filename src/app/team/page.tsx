@@ -58,9 +58,17 @@ const emptyForm = {
   assigned_classroom: "",
   surname_from: "",
   surname_to: "",
+  password: "",
 };
 
 type TeamForm = typeof emptyForm;
+
+type CreatedCredential = {
+  full_name: string;
+  email: string;
+  password: string;
+  role: string;
+};
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value || 0);
@@ -92,6 +100,22 @@ function initials(name: string | null | undefined) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function generateTemporaryPassword() {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const array = new Uint32Array(14);
+
+  if (typeof window !== "undefined" && window.crypto) {
+    window.crypto.getRandomValues(array);
+  } else {
+    array.fill(Date.now());
+  }
+
+  return Array.from(array)
+    .map((number) => alphabet[number % alphabet.length])
+    .join("");
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -196,6 +220,8 @@ export default function TeamSetupPage() {
   const [form, setForm] = useState<TeamForm>(emptyForm);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [createdCredential, setCreatedCredential] =
+    useState<CreatedCredential | null>(null);
 
   const canAccess = profile?.role === "Campaign Manager";
 
@@ -309,7 +335,11 @@ export default function TeamSetupPage() {
 
   function openCreateForm() {
     setEditingMember(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      password: generateTemporaryPassword(),
+    });
+    setCreatedCredential(null);
     setShowForm(true);
     setMessage("");
   }
@@ -326,7 +356,9 @@ export default function TeamSetupPage() {
       assigned_classroom: member.assigned_classroom || "",
       surname_from: member.surname_from || "",
       surname_to: member.surname_to || "",
+      password: "",
     });
+    setCreatedCredential(null);
     setShowForm(true);
     setMessage("");
   }
@@ -334,6 +366,7 @@ export default function TeamSetupPage() {
   function closeForm() {
     setEditingMember(null);
     setForm(emptyForm);
+    setCreatedCredential(null);
     setShowForm(false);
   }
 
@@ -370,6 +403,10 @@ export default function TeamSetupPage() {
     }
 
     if (!form.role) return "Select a role.";
+
+    if (!editingMember && form.password.trim().length < 8) {
+      return "Enter a temporary password of at least 8 characters.";
+    }
 
     if (form.role === "Scrutineer") {
       if (!form.assigned_polling_area) {
@@ -417,21 +454,48 @@ export default function TeamSetupPage() {
       }
 
       setMessage("Team member updated.");
-    } else {
-      const { error } = await supabase.from("campaigners").insert(payload);
-
-      if (error) {
-        console.error("Add team member error:", error);
-        setMessage(error.message || "Error adding team member.");
-        setSaving(false);
-        return;
-      }
-
-      setMessage("Team member added.");
+      await loadTeamMembers();
+      closeForm();
+      setSaving(false);
+      return;
     }
 
+    const temporaryPassword = form.password.trim();
+
+    const { data, error } = await supabase.functions.invoke(
+      "create-team-member",
+      {
+        body: {
+          ...payload,
+          password: temporaryPassword,
+        },
+      }
+    );
+
+    if (error) {
+      console.error("Create team member auth error:", error);
+      setMessage(
+        error.message ||
+          "Error creating Supabase login. Make sure the Edge Function is deployed."
+      );
+      setSaving(false);
+      return;
+    }
+
+    setCreatedCredential({
+      full_name: payload.full_name,
+      email: payload.email || "",
+      password: temporaryPassword,
+      role: payload.role,
+    });
+
+    setMessage(
+      data?.auth_user_created === false
+        ? "Team profile saved. Auth user already existed for this email."
+        : "Team member and Supabase login created."
+    );
+
     await loadTeamMembers();
-    closeForm();
     setSaving(false);
   }
 
@@ -888,6 +952,36 @@ export default function TeamSetupPage() {
                     </div>
                   </div>
 
+                  {!editingMember && (
+                    <div className="rounded-3xl border border-sky-100 bg-sky-50 p-4">
+                      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                        <div>
+                          <FieldLabel>Temporary Password</FieldLabel>
+                          <TextInput
+                            type="text"
+                            value={form.password}
+                            onChange={(value) => updateForm("password", value)}
+                            placeholder="Temporary password"
+                          />
+                        </div>
+
+                        <button
+                          onClick={() =>
+                            updateForm("password", generateTemporaryPassword())
+                          }
+                          className="rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-black text-sky-700 hover:bg-sky-50"
+                        >
+                          Generate
+                        </button>
+                      </div>
+
+                      <p className="mt-3 text-xs font-bold text-sky-800">
+                        This password will be used to create the Supabase login.
+                        Send it to the team member after saving.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <FieldLabel>Phone</FieldLabel>
@@ -991,10 +1085,31 @@ export default function TeamSetupPage() {
                   )}
                 </div>
 
-                <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
-                  This page creates or updates the team profile only. The user
-                  still needs a matching Supabase Auth account/password to log in.
+                <div className="mt-6 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold text-sky-900">
+                  New team members are created in both Team Setup and Supabase
+                  Auth automatically. Passwords are not stored in the database.
                 </div>
+
+                {createdCredential && (
+                  <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4">
+                    <p className="text-xs font-black uppercase tracking-wide text-green-700">
+                      Credentials Ready
+                    </p>
+                    <p className="mt-2 text-sm font-black text-slate-950">
+                      {createdCredential.full_name} · {createdCredential.role}
+                    </p>
+                    <div className="mt-3 rounded-2xl bg-white p-3 text-sm font-semibold text-slate-700">
+                      <p>
+                        <span className="font-black">Email:</span>{" "}
+                        {createdCredential.email}
+                      </p>
+                      <p className="mt-1">
+                        <span className="font-black">Temporary Password:</span>{" "}
+                        {createdCredential.password}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-6 grid gap-3 md:grid-cols-2">
                   <button
@@ -1013,7 +1128,7 @@ export default function TeamSetupPage() {
                       ? "Saving..."
                       : editingMember
                       ? "Save Changes"
-                      : "Add Team Member"}
+                      : "Create Login + Team Member"}
                   </button>
                 </div>
               </div>
