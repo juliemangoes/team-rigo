@@ -988,27 +988,54 @@ export default function ReportsPage() {
             Reports are based on recorded campaign support status and operational voter records.
             Voted status means a voter was marked by the election-day workflow; it is not a record of anyone's private ballot.
           </div>
-
-          <script>
-            window.onload = function () {
-              window.focus();
-              window.print();
-            };
-          </script>
         </body>
       </html>
     `;
 
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+    const oldFrame = document.getElementById("team-rigo-pdf-frame");
+    if (oldFrame) oldFrame.remove();
 
-    if (!reportWindow) {
-      setMessage("Your browser blocked the PDF window. Allow pop-ups and try again.");
+    const iframe = document.createElement("iframe");
+    iframe.id = "team-rigo-pdf-frame";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.visibility = "hidden";
+
+    document.body.appendChild(iframe);
+
+    const frameWindow = iframe.contentWindow;
+    const frameDocument = iframe.contentDocument || frameWindow?.document;
+
+    if (!frameWindow || !frameDocument) {
+      setMessage("Could not open the PDF print window. Try again or use Export CSV.");
+      iframe.remove();
       return;
     }
 
-    reportWindow.document.open();
-    reportWindow.document.write(html);
-    reportWindow.document.close();
+    frameDocument.open();
+    frameDocument.write(html);
+    frameDocument.close();
+
+    const printReport = () => {
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+        setMessage("PDF print window opened. Choose 'Save as PDF' as the printer/destination.");
+      } catch (error) {
+        console.error("PDF print error:", error);
+        setMessage("PDF print window could not open. Your browser may be blocking print dialogs.");
+      }
+
+      setTimeout(() => {
+        iframe.remove();
+      }, 60000);
+    };
+
+    setTimeout(printReport, 500);
   }
 
   function exportCsv() {
