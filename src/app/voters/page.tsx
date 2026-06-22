@@ -94,6 +94,17 @@ type RawVoter = Omit<Voter, "campaigners"> & {
   campaigners?: CampaignerRelation;
 };
 
+type VoterStats = {
+  loaded: number;
+  total: number;
+  confirmed: number;
+  leaning: number;
+  opponent: number;
+  unassigned: number;
+  pickupNeeded: number;
+  voted: number;
+};
+
 const voterSelect = `
   id,
   voter_reg_no,
@@ -160,7 +171,7 @@ function pillClass(color: string | null | undefined, value?: string | null) {
     return "bg-green-100 text-green-800";
   }
 
-  if (color === "blue") return "bg-sky-100 text-sky-800";
+  if (color === "blue") return "bg-blue-100 text-blue-800";
   if (color === "purple" || value === "Leaning Supporter") {
     return "bg-purple-100 text-purple-800";
   }
@@ -211,7 +222,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-sky-100 bg-sky-50 text-sky-700"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -246,7 +257,7 @@ function SelectField({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
     >
       {children}
     </select>
@@ -276,6 +287,16 @@ export default function VotersPage() {
 
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [voterStats, setVoterStats] = useState<VoterStats>({
+    loaded: 0,
+    total: 0,
+    confirmed: 0,
+    leaning: 0,
+    opponent: 0,
+    unassigned: 0,
+    pickupNeeded: 0,
+    voted: 0,
+  });
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkCampaignerId, setBulkCampaignerId] = useState("");
@@ -407,41 +428,33 @@ export default function VotersPage() {
     setLoading(false);
   }
 
-  async function loadVoters() {
-    if (!profile) return;
+  function applyVoterFilters(query: any) {
+    const searchTokens = search
+      .trim()
+      .replace(/[,%()]/g, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .slice(0, 6);
 
-    setLoadingVoters(true);
-    setMessage("");
-
-    const cleanSearch = search.trim().replace(/,/g, " ");
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    let query = supabase
-      .from("voters")
-      .select(voterSelect, { count: "exact" })
-      .order("last_name", { ascending: true, nullsFirst: false })
-      .order("first_name", { ascending: true, nullsFirst: false })
-      .range(from, to);
-
-    if (cleanSearch) {
+    searchTokens.forEach((token) => {
       query = query.or(
         [
-          `voter_reg_no.ilike.%${cleanSearch}%`,
-          `voter_number.ilike.%${cleanSearch}%`,
-          `full_name.ilike.%${cleanSearch}%`,
-          `first_name.ilike.%${cleanSearch}%`,
-          `middle_name.ilike.%${cleanSearch}%`,
-          `last_name.ilike.%${cleanSearch}%`,
-          `contact_no.ilike.%${cleanSearch}%`,
-          `phone.ilike.%${cleanSearch}%`,
-          `street_name.ilike.%${cleanSearch}%`,
-          `address.ilike.%${cleanSearch}%`,
-          `polling_area.ilike.%${cleanSearch}%`,
-          `zone.ilike.%${cleanSearch}%`,
+          `voter_reg_no.ilike.%${token}%`,
+          `voter_number.ilike.%${token}%`,
+          `full_name.ilike.%${token}%`,
+          `first_name.ilike.%${token}%`,
+          `middle_name.ilike.%${token}%`,
+          `last_name.ilike.%${token}%`,
+          `contact_no.ilike.%${token}%`,
+          `phone.ilike.%${token}%`,
+          `street_name.ilike.%${token}%`,
+          `address.ilike.%${token}%`,
+          `polling_area.ilike.%${token}%`,
+          `zone.ilike.%${token}%`,
         ].join(",")
       );
-    }
+    });
 
     if (zoneFilter !== "All") {
       query = query.eq("zone", zoneFilter);
@@ -468,6 +481,89 @@ export default function VotersPage() {
       if (pickupFilter === "Not Needed") query = query.eq("pickup_needed", false);
     }
 
+    return query;
+  }
+
+  async function getFilteredCount(applyExtraFilter?: (query: any) => any) {
+    let query = supabase
+      .from("voters")
+      .select("id", { count: "exact", head: true });
+
+    query = applyVoterFilters(query);
+
+    if (applyExtraFilter) {
+      query = applyExtraFilter(query);
+    }
+
+    const { error, count } = await query;
+
+    if (error) throw error;
+
+    return count || 0;
+  }
+
+  async function loadVoterStats(loadedCount: number, total: number) {
+    try {
+      const [
+        confirmed,
+        leaning,
+        opponent,
+        unassigned,
+        pickupNeeded,
+        voted,
+      ] = await Promise.all([
+        getFilteredCount((query) =>
+          query.eq("support_status", "Confirmed Supporter")
+        ),
+        getFilteredCount((query) =>
+          query.eq("support_status", "Leaning Supporter")
+        ),
+        getFilteredCount((query) =>
+          query.eq("support_status", "Not Supporting")
+        ),
+        getFilteredCount((query) => query.is("campaigner_id", null)),
+        getFilteredCount((query) => query.eq("pickup_needed", true)),
+        getFilteredCount((query) => query.eq("voted", true)),
+      ]);
+
+      setVoterStats({
+        loaded: loadedCount,
+        total,
+        confirmed,
+        leaning,
+        opponent,
+        unassigned,
+        pickupNeeded,
+        voted,
+      });
+    } catch (error) {
+      console.error("Voter stats error:", error);
+      setVoterStats((current) => ({
+        ...current,
+        loaded: loadedCount,
+        total,
+      }));
+    }
+  }
+
+  async function loadVoters() {
+    if (!profile) return;
+
+    setLoadingVoters(true);
+    setMessage("");
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let query = supabase
+      .from("voters")
+      .select(voterSelect, { count: "exact" })
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false })
+      .range(from, to);
+
+    query = applyVoterFilters(query);
+
     const { data, error, count } = await query;
 
     if (error) {
@@ -475,15 +571,27 @@ export default function VotersPage() {
       setMessage(error.message || "Error loading voters.");
       setVoters([]);
       setTotalCount(0);
+      setVoterStats({
+        loaded: 0,
+        total: 0,
+        confirmed: 0,
+        leaning: 0,
+        opponent: 0,
+        unassigned: 0,
+        pickupNeeded: 0,
+        voted: 0,
+      });
       setLoadingVoters(false);
       return;
     }
 
     const normalized = ((data || []) as RawVoter[]).map(normalizeVoter);
+    const nextTotal = count || 0;
 
     setVoters(normalized);
-    setTotalCount(count || 0);
+    setTotalCount(nextTotal);
     setSelectedIds([]);
+    await loadVoterStats(normalized.length, nextTotal);
     setLoadingVoters(false);
   }
 
@@ -603,23 +711,6 @@ export default function VotersPage() {
     return pillClass(option?.color, cleanValue);
   }
 
-  const pageStats = useMemo(() => {
-    return {
-      loaded: voters.length,
-      assigned: voters.filter((voter) => voter.campaigner_id).length,
-      unassigned: voters.filter((voter) => !voter.campaigner_id).length,
-      confirmed: voters.filter(
-        (voter) => voter.support_status === "Confirmed Supporter"
-      ).length,
-      leaning: voters.filter((voter) => voter.support_status === "Leaning Supporter")
-        .length,
-      opponent: voters.filter((voter) => voter.support_status === "Not Supporting")
-        .length,
-      pickupNeeded: voters.filter((voter) => voter.pickup_needed).length,
-      voted: voters.filter((voter) => voter.voted).length,
-    };
-  }, [voters]);
-
   function toggleSelected(id: string) {
     setSelectedIds((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id);
@@ -724,7 +815,7 @@ export default function VotersPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading voters...
             </h1>
@@ -777,7 +868,7 @@ export default function VotersPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
               {message}
             </div>
           )}
@@ -789,34 +880,34 @@ export default function VotersPage() {
           )}
 
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-            <SummaryCard label="Total Found" value={formatNumber(totalCount)} />
+            <SummaryCard label="Total Results" value={formatNumber(voterStats.total)} />
             <SummaryCard
-              label="Loaded"
-              value={formatNumber(pageStats.loaded)}
+              label="Loaded Page"
+              value={formatNumber(voterStats.loaded)}
               detail={`Page ${page} of ${totalPages}`}
               tone="blue"
             />
             <SummaryCard
               label="Confirmed"
-              value={formatNumber(pageStats.confirmed)}
-              detail={`${formatNumber(pageStats.leaning)} leaning`}
+              value={formatNumber(voterStats.confirmed)}
+              detail={`${formatNumber(voterStats.leaning)} leaning`}
               tone="green"
             />
             <SummaryCard
               label="Opponent"
-              value={formatNumber(pageStats.opponent)}
+              value={formatNumber(voterStats.opponent)}
               detail="Not Supporting"
               tone="red"
             />
             <SummaryCard
               label="Unassigned"
-              value={formatNumber(pageStats.unassigned)}
+              value={formatNumber(voterStats.unassigned)}
               detail="No campaigner"
-              tone={pageStats.unassigned > 0 ? "amber" : "green"}
+              tone={voterStats.unassigned > 0 ? "amber" : "green"}
             />
             <SummaryCard
               label="Pickup"
-              value={formatNumber(pageStats.pickupNeeded)}
+              value={formatNumber(voterStats.pickupNeeded)}
               detail="Needed"
               tone="purple"
             />
@@ -836,7 +927,7 @@ export default function VotersPage() {
                     setSearch(event.target.value);
                     resetToFirstPage();
                   }}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                   placeholder="Name, reg no., phone, street..."
                 />
               </div>
@@ -981,7 +1072,7 @@ export default function VotersPage() {
 
                       bulkUpdate({ campaigner_id: bulkCampaignerId });
                     }}
-                    className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
+                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
                   >
                     Apply
                   </button>
@@ -1029,7 +1120,7 @@ export default function VotersPage() {
               </div>
 
               {loadingVoters && (
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
                   Loading...
                 </span>
               )}
@@ -1045,7 +1136,7 @@ export default function VotersPage() {
                     key={voter.id}
                     className={`rounded-3xl border p-4 ${
                       isSelected
-                        ? "border-sky-300 bg-sky-50"
+                        ? "border-blue-300 bg-blue-50"
                         : "border-slate-200 bg-white"
                     }`}
                   >
@@ -1159,7 +1250,7 @@ export default function VotersPage() {
 
                         <button
                           onClick={() => openManageModal(voter)}
-                          className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
+                          className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
                         >
                           Manage
                         </button>
@@ -1351,7 +1442,7 @@ export default function VotersPage() {
                         <td className="px-3 py-3">
                           <button
                             onClick={() => openManageModal(voter)}
-                            className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white hover:bg-sky-800"
+                            className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white hover:bg-blue-800"
                           >
                             Manage
                           </button>
@@ -1428,7 +1519,7 @@ export default function VotersPage() {
                     <input
                       value={manageContact}
                       onChange={(event) => setManageContact(event.target.value)}
-                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                       placeholder="Contact number"
                     />
                   </div>
@@ -1479,7 +1570,7 @@ export default function VotersPage() {
                     <textarea
                       value={manageNotes}
                       onChange={(event) => setManageNotes(event.target.value)}
-                      className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+                      className="mt-2 min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                       placeholder="Notes"
                     />
                   </div>
@@ -1495,7 +1586,7 @@ export default function VotersPage() {
 
                   <button
                     onClick={saveManageModal}
-                    className="rounded-2xl bg-sky-700 px-4 py-3 font-black text-white hover:bg-sky-800"
+                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800"
                   >
                     Save Changes
                   </button>
