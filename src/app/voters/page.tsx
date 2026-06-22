@@ -450,7 +450,9 @@ export default function VotersPage() {
       .filter(Boolean)
       .slice(0, 6);
 
-    searchTokens.forEach((token) => {
+    if (searchTokens.length === 1) {
+      const token = searchTokens[0];
+
       query = query.or(
         [
           `voter_reg_no.ilike.%${token}%`,
@@ -467,7 +469,46 @@ export default function VotersPage() {
           `zone.ilike.%${token}%`,
         ].join(",")
       );
-    });
+    }
+
+    if (searchTokens.length > 1) {
+      const hasNumber = searchTokens.some((token) => /\d/.test(token));
+
+      if (hasNumber) {
+        // Mixed searches like a voter number plus a name still require every token.
+        searchTokens.forEach((token) => {
+          query = query.or(
+            [
+              `voter_reg_no.ilike.%${token}%`,
+              `voter_number.ilike.%${token}%`,
+              `full_name.ilike.%${token}%`,
+              `first_name.ilike.%${token}%`,
+              `middle_name.ilike.%${token}%`,
+              `last_name.ilike.%${token}%`,
+              `contact_no.ilike.%${token}%`,
+              `phone.ilike.%${token}%`,
+            ].join(",")
+          );
+        });
+      } else {
+        // Multi-word text searches are treated as a person's name.
+        // This prevents "Julian Brown" from returning everyone with either
+        // Julian anywhere OR Brown anywhere.
+        const firstToken = searchTokens[0];
+        const lastToken = searchTokens[searchTokens.length - 1];
+        const forwardNamePattern = `%${searchTokens.join("%")}%`;
+        const reverseNamePattern = `%${[...searchTokens].reverse().join("%")}%`;
+
+        query = query.or(
+          [
+            `full_name.ilike.${forwardNamePattern}`,
+            `full_name.ilike.${reverseNamePattern}`,
+            `and(first_name.ilike.%${firstToken}%,last_name.ilike.%${lastToken}%)`,
+            `and(first_name.ilike.%${lastToken}%,last_name.ilike.%${firstToken}%)`,
+          ].join(",")
+        );
+      }
+    }
 
     if (zoneFilter !== "All") {
       query = query.eq("zone", zoneFilter);
@@ -977,7 +1018,7 @@ export default function VotersPage() {
                     resetToFirstPage();
                   }}
                   className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Name, reg no., phone, street..."
+                  placeholder="Search exact name, reg no., phone..."
                 />
               </div>
 
