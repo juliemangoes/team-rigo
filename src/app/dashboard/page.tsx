@@ -96,12 +96,14 @@ const VOTER_BATCH_SIZE = 1000;
 
 async function fetchAllDashboardVoters() {
   const allRows: VoterSnapshot[] = [];
+  const seenIds = new Set<string>();
   let from = 0;
+  let expectedTotal: number | null = null;
 
   while (true) {
     const to = from + VOTER_BATCH_SIZE - 1;
 
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from("voters")
       .select(
         `
@@ -113,25 +115,41 @@ async function fetchAllDashboardVoters() {
         pickup_status,
         voted,
         campaigner_id
-      `
+      `,
+        { count: "exact" }
       )
+      .order("id", { ascending: true })
       .range(from, to);
 
     if (error) {
-      return { data: allRows, error };
+      return { data: allRows, error, count: expectedTotal ?? allRows.length };
+    }
+
+    if (expectedTotal === null) {
+      expectedTotal = count ?? null;
     }
 
     const batch = (data || []) as VoterSnapshot[];
-    allRows.push(...batch);
 
-    if (batch.length < VOTER_BATCH_SIZE) {
+    batch.forEach((row) => {
+      if (!seenIds.has(row.id)) {
+        seenIds.add(row.id);
+        allRows.push(row);
+      }
+    });
+
+    if (expectedTotal !== null && allRows.length >= expectedTotal) {
+      break;
+    }
+
+    if (batch.length === 0 || batch.length < VOTER_BATCH_SIZE) {
       break;
     }
 
     from += VOTER_BATCH_SIZE;
   }
 
-  return { data: allRows, error: null };
+  return { data: allRows, error: null, count: expectedTotal ?? allRows.length };
 }
 
 function formatNumber(value: number) {
