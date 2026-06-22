@@ -92,6 +92,48 @@ type PollingSummary = {
 
 type Tone = "sky" | "green" | "red" | "amber" | "purple" | "slate";
 
+const VOTER_BATCH_SIZE = 1000;
+
+async function fetchAllDashboardVoters() {
+  const allRows: VoterSnapshot[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + VOTER_BATCH_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from("voters")
+      .select(
+        `
+        id,
+        zone,
+        polling_area,
+        support_status,
+        pickup_needed,
+        pickup_status,
+        voted,
+        campaigner_id
+      `
+      )
+      .range(from, to);
+
+    if (error) {
+      return { data: allRows, error };
+    }
+
+    const batch = (data || []) as VoterSnapshot[];
+    allRows.push(...batch);
+
+    if (batch.length < VOTER_BATCH_SIZE) {
+      break;
+    }
+
+    from += VOTER_BATCH_SIZE;
+  }
+
+  return { data: allRows, error: null };
+}
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(Math.round(value) || 0);
 }
@@ -572,21 +614,7 @@ export default function DashboardPage() {
         .order("display_order", { ascending: true })
         .order("name", { ascending: true }),
 
-      supabase
-        .from("voters")
-        .select(
-          `
-          id,
-          zone,
-          polling_area,
-          support_status,
-          pickup_needed,
-          pickup_status,
-          voted,
-          campaigner_id
-        `
-        )
-        .range(0, 49999),
+      fetchAllDashboardVoters(),
 
       supabase
         .from("campaigners")

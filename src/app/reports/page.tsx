@@ -184,6 +184,40 @@ const defaultSupportStatuses = [
   "Do Not Contact",
 ];
 
+const VOTER_BATCH_SIZE = 1000;
+
+async function fetchAllReportVoters() {
+  const allRows: RawVoter[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + VOTER_BATCH_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from("voters")
+      .select(voterSelect)
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      return { data: allRows, error };
+    }
+
+    const batch = (data || []) as RawVoter[];
+    allRows.push(...batch);
+
+    if (batch.length < VOTER_BATCH_SIZE) {
+      break;
+    }
+
+    from += VOTER_BATCH_SIZE;
+  }
+
+  return { data: allRows, error: null };
+}
+
 function normalizeVoter(item: RawVoter): Voter {
   return {
     ...item,
@@ -327,7 +361,7 @@ function SummaryCard({
 }) {
   const color =
     tone === "blue"
-      ? "border-sky-100 bg-sky-50 text-sky-700"
+      ? "border-blue-100 bg-blue-50 text-blue-700"
       : tone === "green"
       ? "border-green-100 bg-green-50 text-green-700"
       : tone === "red"
@@ -362,7 +396,7 @@ function SelectField({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
     >
       {children}
     </select>
@@ -501,12 +535,7 @@ export default function ReportsPage() {
     setLoadingReport(true);
     setMessage("");
 
-    const { data, error } = await supabase
-      .from("voters")
-      .select(voterSelect)
-      .order("last_name", { ascending: true, nullsFirst: false })
-      .order("first_name", { ascending: true, nullsFirst: false })
-      .range(0, 49999);
+    const { data, error } = await fetchAllReportVoters();
 
     if (error) {
       console.error("Reports voter load error:", error);
@@ -1033,7 +1062,7 @@ export default function ReportsPage() {
       <main className="min-h-screen bg-slate-100 p-4 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-700" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
             <h1 className="mt-5 text-xl font-black text-slate-900">
               Loading reports...
             </h1>
@@ -1084,7 +1113,7 @@ export default function ReportsPage() {
           </div>
 
           {message && (
-            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-bold text-sky-900">
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-900">
               {message}
             </div>
           )}
@@ -1153,7 +1182,7 @@ export default function ReportsPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-4 focus:ring-sky-100"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                     placeholder="Name, reg no., phone..."
                   />
                 </div>
@@ -1260,7 +1289,7 @@ export default function ReportsPage() {
                 <button
                   onClick={exportPdf}
                   disabled={reportVoters.length === 0}
-                  className="rounded-2xl bg-sky-700 px-5 py-3 text-sm font-black text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-sky-300"
+                  className="rounded-2xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
                 >
                   Export PDF
                 </button>
@@ -1280,7 +1309,7 @@ export default function ReportsPage() {
               </div>
 
               {loadingReport && (
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
                   Loading...
                 </span>
               )}
@@ -1323,7 +1352,7 @@ export default function ReportsPage() {
                       <td className="px-3 py-3 font-bold text-amber-700">
                         {formatNumber(row.undecidedUnknown)}
                       </td>
-                      <td className="px-3 py-3 font-bold text-sky-700">
+                      <td className="px-3 py-3 font-bold text-blue-700">
                         {formatNumber(row.voted)}
                       </td>
                       <td className="px-3 py-3 font-bold text-slate-700">
