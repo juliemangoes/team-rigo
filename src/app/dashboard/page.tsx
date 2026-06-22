@@ -21,21 +21,6 @@ type CampaignSettings = {
   vote_target_to_win: number | null;
 };
 
-type CampaignZone = {
-  id: string;
-  name: string;
-  description: string | null;
-  display_order: number | null;
-};
-
-type PollingArea = {
-  id: string;
-  code: string;
-  name: string | null;
-  location: string | null;
-  display_order: number | null;
-};
-
 type Competitor = {
   id: string;
   name: string;
@@ -43,22 +28,31 @@ type Competitor = {
   display_order: number | null;
 };
 
-type VoterSnapshot = {
-  id: string;
-  zone: string | null;
-  polling_area: string | null;
-  support_status: string | null;
-  pickup_needed: boolean;
-  pickup_status: string | null;
-  voted: boolean;
-  campaigner_id: string | null;
+type DashboardBaseStats = {
+  total: number;
+  confirmed: number;
+  leaning: number;
+  opponent: number;
+  undecidedUnknown: number;
+  projected: number;
+  margin: number;
+  teamVoted: number;
+  opponentVoted: number;
+  undecidedVoted: number;
+  totalVoted: number;
+  confirmedLeft: number;
+  teamLeft: number;
+  pickupNeeded: number;
+  pickupIssues: number;
+  unassigned: number;
 };
 
-type Campaigner = {
-  id: string;
-  full_name: string;
-  role: string | null;
-  zone: string | null;
+type TeamStats = {
+  total: number;
+  campaigners: number;
+  drivers: number;
+  scrutineers: number;
+  zoneLeaders: number;
 };
 
 type ZoneSummary = {
@@ -92,65 +86,32 @@ type PollingSummary = {
 
 type Tone = "sky" | "green" | "red" | "amber" | "purple" | "slate";
 
-const VOTER_BATCH_SIZE = 1000;
+const emptyStats: DashboardBaseStats = {
+  total: 0,
+  confirmed: 0,
+  leaning: 0,
+  opponent: 0,
+  undecidedUnknown: 0,
+  projected: 0,
+  margin: 0,
+  teamVoted: 0,
+  opponentVoted: 0,
+  undecidedVoted: 0,
+  totalVoted: 0,
+  confirmedLeft: 0,
+  teamLeft: 0,
+  pickupNeeded: 0,
+  pickupIssues: 0,
+  unassigned: 0,
+};
 
-async function fetchAllDashboardVoters() {
-  const allRows: VoterSnapshot[] = [];
-  const seenIds = new Set<string>();
-  let from = 0;
-  let expectedTotal: number | null = null;
-
-  while (true) {
-    const to = from + VOTER_BATCH_SIZE - 1;
-
-    const { data, error, count } = await supabase
-      .from("voters")
-      .select(
-        `
-        id,
-        zone,
-        polling_area,
-        support_status,
-        pickup_needed,
-        pickup_status,
-        voted,
-        campaigner_id
-      `,
-        { count: "exact" }
-      )
-      .order("id", { ascending: true })
-      .range(from, to);
-
-    if (error) {
-      return { data: allRows, error, count: expectedTotal ?? allRows.length };
-    }
-
-    if (expectedTotal === null) {
-      expectedTotal = count ?? null;
-    }
-
-    const batch = (data || []) as VoterSnapshot[];
-
-    batch.forEach((row) => {
-      if (!seenIds.has(row.id)) {
-        seenIds.add(row.id);
-        allRows.push(row);
-      }
-    });
-
-    if (expectedTotal !== null && allRows.length >= expectedTotal) {
-      break;
-    }
-
-    if (batch.length === 0 || batch.length < VOTER_BATCH_SIZE) {
-      break;
-    }
-
-    from += VOTER_BATCH_SIZE;
-  }
-
-  return { data: allRows, error: null, count: expectedTotal ?? allRows.length };
-}
+const emptyTeamStats: TeamStats = {
+  total: 0,
+  campaigners: 0,
+  drivers: 0,
+  scrutineers: 0,
+  zoneLeaders: 0,
+};
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(Math.round(value) || 0);
@@ -170,26 +131,6 @@ function percentage(value: number, total: number) {
 function clamp(value: number, min = 0, max = 100) {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, value));
-}
-
-function isConfirmed(status: string | null) {
-  return status === "Confirmed Supporter";
-}
-
-function isLeaning(status: string | null) {
-  return status === "Leaning Supporter";
-}
-
-function isTeamSupport(status: string | null) {
-  return isConfirmed(status) || isLeaning(status);
-}
-
-function isOpponent(status: string | null) {
-  return status === "Not Supporting";
-}
-
-function isUndecidedUnknown(status: string | null) {
-  return !status || status === "Unknown" || status === "Undecided";
 }
 
 function toneClass(tone: Tone) {
@@ -424,34 +365,6 @@ function AppListItem({
   );
 }
 
-function DonutMetric({
-  percentageValue,
-  center,
-  label,
-}: {
-  percentageValue: number;
-  center: string;
-  label: string;
-}) {
-  const safeValue = clamp(percentageValue);
-
-  return (
-    <div className="relative mx-auto flex h-48 w-48 items-center justify-center">
-      <div
-        className="absolute inset-0 rounded-full"
-        style={{
-          background: `conic-gradient(#0ea5e9 ${safeValue}%, #e2e8f0 ${safeValue}% 100%)`,
-        }}
-      />
-      <div className="absolute inset-5 rounded-full bg-white shadow-inner" />
-      <div className="relative text-center">
-        <p className="text-3xl font-black tracking-tight text-slate-950">{center}</p>
-        <p className="mt-1 text-xs font-bold text-slate-500">{label}</p>
-      </div>
-    </div>
-  );
-}
-
 function VotesCastedDonut({
   teamVotes,
   opponentVotes,
@@ -549,11 +462,11 @@ function VotesCastedDonut({
 export default function DashboardPage() {
   const [profile, setProfile] = useState<TeamProfile | null>(null);
   const [settings, setSettings] = useState<CampaignSettings | null>(null);
-  const [zones, setZones] = useState<CampaignZone[]>([]);
-  const [pollingAreas, setPollingAreas] = useState<PollingArea[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [voters, setVoters] = useState<VoterSnapshot[]>([]);
-  const [campaigners, setCampaigners] = useState<Campaigner[]>([]);
+  const [snapshotStats, setSnapshotStats] = useState<DashboardBaseStats>(emptyStats);
+  const [zoneSummaryData, setZoneSummaryData] = useState<ZoneSummary[]>([]);
+  const [pollingSummaryData, setPollingSummaryData] = useState<PollingSummary[]>([]);
+  const [teamStatsData, setTeamStatsData] = useState<TeamStats>(emptyTeamStats);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -602,11 +515,8 @@ export default function DashboardPage() {
 
     const [
       settingsResult,
-      zonesResult,
-      pollingResult,
       competitorsResult,
-      votersResult,
-      campaignersResult,
+      snapshotResult,
     ] = await Promise.all([
       supabase
         .from("campaign_settings")
@@ -615,29 +525,12 @@ export default function DashboardPage() {
         .maybeSingle(),
 
       supabase
-        .from("campaign_zones")
-        .select("id, name, description, display_order")
-        .order("display_order", { ascending: true })
-        .order("name", { ascending: true }),
-
-      supabase
-        .from("polling_areas")
-        .select("id, code, name, location, display_order")
-        .order("display_order", { ascending: true })
-        .order("code", { ascending: true }),
-
-      supabase
         .from("competitors")
         .select("id, name, description, display_order")
         .order("display_order", { ascending: true })
         .order("name", { ascending: true }),
 
-      fetchAllDashboardVoters(),
-
-      supabase
-        .from("campaigners")
-        .select("id, full_name, role, zone")
-        .order("full_name", { ascending: true }),
+      supabase.rpc("get_dashboard_snapshot"),
     ]);
 
     if (settingsResult.error) {
@@ -647,20 +540,6 @@ export default function DashboardPage() {
       setSettings(settingsResult.data || null);
     }
 
-    if (zonesResult.error) {
-      console.error("Zones error:", zonesResult.error);
-      setZones([]);
-    } else {
-      setZones(zonesResult.data || []);
-    }
-
-    if (pollingResult.error) {
-      console.error("Polling areas error:", pollingResult.error);
-      setPollingAreas([]);
-    } else {
-      setPollingAreas(pollingResult.data || []);
-    }
-
     if (competitorsResult.error) {
       console.error("Competitors error:", competitorsResult.error);
       setCompetitors([]);
@@ -668,19 +547,25 @@ export default function DashboardPage() {
       setCompetitors(competitorsResult.data || []);
     }
 
-    if (votersResult.error) {
-      console.error("Voters error:", votersResult.error);
-      setMessage("Error loading voter dashboard data.");
-      setVoters([]);
+    if (snapshotResult.error) {
+      console.error("Dashboard snapshot error:", snapshotResult.error);
+      setMessage("Error loading optimized dashboard data. Run the dashboard RPC SQL first.");
+      setSnapshotStats(emptyStats);
+      setZoneSummaryData([]);
+      setPollingSummaryData([]);
+      setTeamStatsData(emptyTeamStats);
     } else {
-      setVoters(votersResult.data || []);
-    }
+      const snapshot = snapshotResult.data as {
+        stats?: Partial<DashboardBaseStats>;
+        zoneSummary?: ZoneSummary[];
+        pollingSummary?: PollingSummary[];
+        teamStats?: Partial<TeamStats>;
+      } | null;
 
-    if (campaignersResult.error) {
-      console.error("Campaigners error:", campaignersResult.error);
-      setCampaigners([]);
-    } else {
-      setCampaigners(campaignersResult.data || []);
+      setSnapshotStats({ ...emptyStats, ...(snapshot?.stats || {}) });
+      setZoneSummaryData(snapshot?.zoneSummary || []);
+      setPollingSummaryData(snapshot?.pollingSummary || []);
+      setTeamStatsData({ ...emptyTeamStats, ...(snapshot?.teamStats || {}) });
     }
 
     setLoading(false);
@@ -691,204 +576,28 @@ export default function DashboardPage() {
   const electionName = settings?.election_name || `${OUR_NAME} Campaign`;
 
   const stats = useMemo(() => {
-    const total = voters.length;
     const target = settings?.vote_target_to_win || 0;
-
-    const confirmed = voters.filter((voter) =>
-      isConfirmed(voter.support_status)
-    ).length;
-    const leaning = voters.filter((voter) => isLeaning(voter.support_status)).length;
-    const opponent = voters.filter((voter) =>
-      isOpponent(voter.support_status)
-    ).length;
-    const undecidedUnknown = voters.filter((voter) =>
-      isUndecidedUnknown(voter.support_status)
-    ).length;
-
-    const projected = Math.round(confirmed + leaning * 0.5);
-    const margin = projected - opponent;
-
-    const teamVoted = voters.filter(
-      (voter) => voter.voted && isTeamSupport(voter.support_status)
-    ).length;
-    const opponentVoted = voters.filter(
-      (voter) => voter.voted && isOpponent(voter.support_status)
-    ).length;
-    const undecidedVoted = voters.filter(
-      (voter) =>
-        voter.voted &&
-        !isTeamSupport(voter.support_status) &&
-        !isOpponent(voter.support_status)
-    ).length;
-    const totalVoted = voters.filter((voter) => voter.voted).length;
-
-    const confirmedLeft = voters.filter(
-      (voter) => !voter.voted && isConfirmed(voter.support_status)
-    ).length;
-    const teamLeft = voters.filter(
-      (voter) => !voter.voted && isTeamSupport(voter.support_status)
-    ).length;
-
-    const pickupNeeded = voters.filter((voter) => voter.pickup_needed).length;
-    const pickupIssues = voters.filter(
-      (voter) => voter.pickup_status === "Issue"
-    ).length;
-    const unassigned = voters.filter((voter) => !voter.campaigner_id).length;
+    const projected = snapshotStats.projected || 0;
+    const confirmed = snapshotStats.confirmed || 0;
+    const opponent = snapshotStats.opponent || 0;
 
     return {
-      total,
+      ...snapshotStats,
       target,
-      confirmed,
-      leaning,
-      opponent,
-      undecidedUnknown,
-      projected,
-      margin,
-      teamVoted,
-      opponentVoted,
-      undecidedVoted,
-      totalVoted,
-      confirmedLeft,
-      teamLeft,
-      pickupNeeded,
-      pickupIssues,
-      unassigned,
       targetProgress: percentage(projected, target),
-      turnoutProgress: percentage(totalVoted, total),
+      turnoutProgress: percentage(snapshotStats.totalVoted, snapshotStats.total),
       voteNeed: Math.max(0, target - projected),
       status: getStatus(projected, confirmed, opponent, target),
     };
-  }, [voters, settings]);
+  }, [snapshotStats, settings]);
 
   const zoneSummary = useMemo(() => {
-    const map = new Map<string, ZoneSummary>();
-
-    function emptyZone(zone: string): ZoneSummary {
-      return {
-        zone,
-        total: 0,
-        confirmed: 0,
-        leaning: 0,
-        projected: 0,
-        opponent: 0,
-        undecidedUnknown: 0,
-        margin: 0,
-        votedTeam: 0,
-        votedOpponent: 0,
-        confirmedLeft: 0,
-        pickupNeeded: 0,
-        issues: 0,
-      };
-    }
-
-    zones.forEach((zone) => map.set(zone.name, emptyZone(zone.name)));
-
-    voters.forEach((voter) => {
-      const zone = voter.zone || "No Zone";
-
-      if (!map.has(zone)) map.set(zone, emptyZone(zone));
-
-      const item = map.get(zone)!;
-
-      item.total += 1;
-
-      if (isConfirmed(voter.support_status)) {
-        item.confirmed += 1;
-        if (!voter.voted) item.confirmedLeft += 1;
-      }
-
-      if (isLeaning(voter.support_status)) item.leaning += 1;
-      if (isOpponent(voter.support_status)) item.opponent += 1;
-      if (isUndecidedUnknown(voter.support_status)) item.undecidedUnknown += 1;
-
-      if (voter.voted && isTeamSupport(voter.support_status)) item.votedTeam += 1;
-      if (voter.voted && isOpponent(voter.support_status)) item.votedOpponent += 1;
-
-      if (voter.pickup_needed) item.pickupNeeded += 1;
-      if (voter.pickup_status === "Issue") item.issues += 1;
-    });
-
-    return Array.from(map.values())
-      .map((item) => {
-        const projected = Math.round(item.confirmed + item.leaning * 0.5);
-        return {
-          ...item,
-          projected,
-          margin: projected - item.opponent,
-        };
-      })
-      .sort((a, b) => b.margin - a.margin);
-  }, [voters, zones]);
+    return [...zoneSummaryData].sort((a, b) => b.margin - a.margin);
+  }, [zoneSummaryData]);
 
   const pollingSummary = useMemo(() => {
-    const map = new Map<string, PollingSummary>();
-
-    pollingAreas.forEach((area) => {
-      map.set(area.code, {
-        pollingArea: area.code,
-        total: 0,
-        projected: 0,
-        opponent: 0,
-        margin: 0,
-        voted: 0,
-        votedTeam: 0,
-        votedOpponent: 0,
-        votedUndecided: 0,
-        confirmedLeft: 0,
-      });
-    });
-
-    voters.forEach((voter) => {
-      const pollingArea = voter.polling_area || "No Polling";
-
-      if (!map.has(pollingArea)) {
-        map.set(pollingArea, {
-          pollingArea,
-          total: 0,
-          projected: 0,
-          opponent: 0,
-          margin: 0,
-          voted: 0,
-          votedTeam: 0,
-          votedOpponent: 0,
-          votedUndecided: 0,
-          confirmedLeft: 0,
-        });
-      }
-
-      const item = map.get(pollingArea)!;
-
-      item.total += 1;
-
-      if (isConfirmed(voter.support_status)) {
-        item.projected += 1;
-        if (!voter.voted) item.confirmedLeft += 1;
-      }
-
-      if (isLeaning(voter.support_status)) item.projected += 0.5;
-      if (isOpponent(voter.support_status)) item.opponent += 1;
-
-      if (voter.voted) {
-        item.voted += 1;
-
-        if (isTeamSupport(voter.support_status)) item.votedTeam += 1;
-        else if (isOpponent(voter.support_status)) item.votedOpponent += 1;
-        else item.votedUndecided += 1;
-      }
-    });
-
-    return Array.from(map.values())
-      .map((item) => {
-        const projected = Math.round(item.projected);
-
-        return {
-          ...item,
-          projected,
-          margin: projected - item.opponent,
-        };
-      })
-      .sort((a, b) => b.voted - a.voted);
-  }, [voters, pollingAreas]);
+    return [...pollingSummaryData].sort((a, b) => b.voted - a.voted);
+  }, [pollingSummaryData]);
 
   const topZones = zoneSummary.slice(0, 4);
   const riskZones = [...zoneSummary]
@@ -896,18 +605,7 @@ export default function DashboardPage() {
     .slice(0, 4);
   const topPollingPerformance = pollingSummary.slice(0, 6);
 
-  const teamStats = useMemo(() => {
-    return {
-      total: campaigners.length,
-      campaigners: campaigners.filter((person) => person.role === "Campaigner")
-        .length,
-      drivers: campaigners.filter((person) => person.role === "Driver").length,
-      scrutineers: campaigners.filter((person) => person.role === "Scrutineer")
-        .length,
-      zoneLeaders: campaigners.filter((person) => person.role === "Zone Leader")
-        .length,
-    };
-  }, [campaigners]);
+  const teamStats = teamStatsData;
 
   if (loading) {
     return (
@@ -915,7 +613,7 @@ export default function DashboardPage() {
         <div className="rounded-[2rem] bg-white p-6 text-center shadow-sm">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-sky-600" />
           <h1 className="mt-5 text-lg font-black text-slate-900">
-            Loading dashboard...
+            Loading optimized dashboard...
           </h1>
         </div>
       </main>
