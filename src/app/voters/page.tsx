@@ -105,6 +105,12 @@ type VoterStats = {
   voted: number;
 };
 
+type PendingBulkAction = {
+  label: string;
+  payload: Partial<Voter>;
+  ids: string[];
+};
+
 const voterSelect = `
   id,
   voter_reg_no,
@@ -301,6 +307,9 @@ export default function VotersPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkCampaignerId, setBulkCampaignerId] = useState("");
   const [bulkSupportStatus, setBulkSupportStatus] = useState("");
+  const [pendingBulkAction, setPendingBulkAction] =
+    useState<PendingBulkAction | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const [manageVoter, setManageVoter] = useState<Voter | null>(null);
   const [manageContact, setManageContact] = useState("");
@@ -315,6 +324,8 @@ export default function VotersPage() {
   const canManage = profile?.role === "Campaign Manager";
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   useEffect(() => {
     loadInitialData();
@@ -748,7 +759,7 @@ export default function VotersPage() {
     await loadVoters();
   }
 
-  async function bulkUpdate(payload: Partial<Voter>) {
+  function requestBulkUpdate(label: string, payload: Partial<Voter>) {
     if (!canManage) {
       alert("Only the Campaign Manager can use bulk actions.");
       return;
@@ -759,29 +770,49 @@ export default function VotersPage() {
       return;
     }
 
-    const confirmed = confirm(`Update ${selectedIds.length} selected voter(s)?`);
+    // Do not use the browser's native confirm(). It blocks the main thread
+    // and can trigger an INP warning on slower devices. This opens a normal
+    // React modal immediately, keeping the click response fast.
+    setPendingBulkAction({
+      label,
+      payload,
+      ids: [...selectedIds],
+    });
+  }
 
-    if (!confirmed) return;
+  async function runPendingBulkUpdate() {
+    if (!pendingBulkAction || bulkSaving) return;
 
-    setMessage("");
+    setBulkSaving(true);
+    setMessage("Applying bulk update...");
+
+    // Let the modal/button loading state paint before the network request starts.
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+
+    const idsToUpdate = pendingBulkAction.ids;
 
     const { error } = await supabase
       .from("voters")
-      .update(payload)
-      .in("id", selectedIds);
+      .update(pendingBulkAction.payload)
+      .in("id", idsToUpdate);
 
     if (error) {
       console.error("Bulk update error:", error);
       setMessage(error.message || "Error applying bulk update.");
+      setBulkSaving(false);
       return;
     }
 
-    setMessage(`${selectedIds.length} voter(s) updated.`);
+    setMessage(`${idsToUpdate.length} voter(s) updated.`);
     setSelectedIds([]);
     setBulkCampaignerId("");
     setBulkSupportStatus("");
+    setPendingBulkAction(null);
 
     await loadVoters();
+    setBulkSaving(false);
   }
 
   function openManageModal(voter: Voter) {
@@ -1064,15 +1095,23 @@ export default function VotersPage() {
                   </SelectField>
 
                   <button
+                    disabled={bulkSaving}
                     onClick={() => {
                       if (!bulkCampaignerId) {
                         alert("Choose a campaigner first.");
                         return;
                       }
 
-                      bulkUpdate({ campaigner_id: bulkCampaignerId });
+                      const campaigner = campaigners.find(
+                        (person) => person.id === bulkCampaignerId
+                      );
+
+                      requestBulkUpdate(
+                        `Assign selected voters to ${campaigner?.full_name || "campaigner"}`,
+                        { campaigner_id: bulkCampaignerId }
+                      );
                     }}
-                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                    className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Apply
                   </button>
@@ -1090,15 +1129,19 @@ export default function VotersPage() {
                   </SelectField>
 
                   <button
+                    disabled={bulkSaving}
                     onClick={() => {
                       if (!bulkSupportStatus) {
                         alert("Choose a support status first.");
                         return;
                       }
 
-                      bulkUpdate({ support_status: bulkSupportStatus });
+                      requestBulkUpdate(
+                        `Set selected voters to ${getSupportStatusLabel(bulkSupportStatus)}`,
+                        { support_status: bulkSupportStatus }
+                      );
                     }}
-                    className="rounded-2xl bg-green-700 px-4 py-3 text-sm font-black text-white hover:bg-green-800"
+                    className="rounded-2xl bg-green-700 px-4 py-3 text-sm font-black text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Apply
                   </button>
@@ -1129,7 +1172,7 @@ export default function VotersPage() {
             <div className="mt-4 grid gap-3 lg:hidden">
               {voters.map((voter) => {
                 const contact = compactContact(voter.contact_no || voter.phone);
-                const isSelected = selectedIds.includes(voter.id);
+                const isSelected = selectedIdSet.has(voter.id);
 
                 return (
                   <article
@@ -1293,7 +1336,7 @@ export default function VotersPage() {
                         <td className="py-3 pr-3">
                           <input
                             type="checkbox"
-                            checked={selectedIds.includes(voter.id)}
+                            checked={selectedIdSet.has(voter.id)}
                             onChange={() => toggleSelected(voter.id)}
                             className="h-5 w-5"
                           />
@@ -1491,6 +1534,39 @@ export default function VotersPage() {
               </div>
             </div>
           </section>
+
+          {pendingBulkAction && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+              <div className="w-full rounded-t-3xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-3xl sm:p-6">
+                <h2 className="text-2xl font-black text-slate-900">
+                  Confirm Bulk Update
+                </h2>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+                  {pendingBulkAction.label} for {pendingBulkAction.ids.length} selected
+                  voter(s). This update will apply to the selected records on this page.
+                </p>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <button
+                    disabled={bulkSaving}
+                    onClick={() => setPendingBulkAction(null)}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    disabled={bulkSaving}
+                    onClick={runPendingBulkUpdate}
+                    className="rounded-2xl bg-green-700 px-4 py-3 font-black text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {bulkSaving ? "Applying..." : "Confirm Update"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {manageVoter && (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">

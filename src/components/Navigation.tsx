@@ -47,11 +47,6 @@ const allLinks: NavLink[] = [
     description: "Campaigner and driver work",
   },
   {
-    href: "/scrutineer",
-    label: "Scrutineer",
-    description: "Election day marking",
-  },
-  {
     href: "/team",
     label: "Team Setup",
     shortLabel: "Team",
