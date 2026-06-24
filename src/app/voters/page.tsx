@@ -312,6 +312,8 @@ export default function VotersPage() {
   const [pendingBulkAction, setPendingBulkAction] =
     useState<PendingBulkAction | null>(null);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [savingManage, setSavingManage] = useState(false);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [manageVoter, setManageVoter] = useState<Voter | null>(null);
   const [manageContact, setManageContact] = useState("");
@@ -616,19 +618,16 @@ export default function VotersPage() {
     setLoadingVoters(true);
     setMessage("");
 
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    let query = supabase
-      .from("voters")
-      .select(voterSelect, { count: "exact" })
-      .order("last_name", { ascending: true, nullsFirst: false })
-      .order("first_name", { ascending: true, nullsFirst: false })
-      .range(from, to);
-
-    query = applyVoterFilters(query);
-
-    const { data, error, count } = await query;
+    const { data, error } = await supabase.rpc("search_voters_module", {
+      p_search: search,
+      p_zone: zoneFilter,
+      p_polling_area: pollingAreaFilter,
+      p_support_status: supportFilter,
+      p_campaigner_id: campaignerFilter,
+      p_pickup_filter: pickupFilter,
+      p_page: page,
+      p_page_size: PAGE_SIZE,
+    });
 
     if (requestId !== loadRequestRef.current) return;
 
@@ -651,15 +650,29 @@ export default function VotersPage() {
       return;
     }
 
-    const normalized = ((data || []) as RawVoter[]).map(normalizeVoter);
-    const nextTotal = count || 0;
+    const result = (data || {}) as {
+      rows?: RawVoter[];
+      total?: number;
+      stats?: Partial<VoterStats>;
+    };
+
+    const normalized = ((result.rows || []) as RawVoter[]).map(normalizeVoter);
+    const nextTotal = Number(result.total || 0);
+    const stats = result.stats || {};
 
     setVoters(normalized);
     setTotalCount(nextTotal);
     setSelectedIds([]);
-    await loadVoterStats(normalized.length, nextTotal, requestId);
-
-    if (requestId !== loadRequestRef.current) return;
+    setVoterStats({
+      loaded: normalized.length,
+      total: nextTotal,
+      confirmed: Number(stats.confirmed || 0),
+      leaning: Number(stats.leaning || 0),
+      opponent: Number(stats.opponent || 0),
+      unassigned: Number(stats.unassigned || 0),
+      pickupNeeded: Number(stats.pickupNeeded || 0),
+      voted: Number(stats.voted || 0),
+    });
 
     setLoadingVoters(false);
   }
@@ -799,23 +812,98 @@ export default function VotersPage() {
     setSelectedIds(voters.map((voter) => voter.id));
   }
 
-  async function updateVoter(voterId: string, payload: Partial<Voter>) {
-    if (!canManage) {
-      alert("Only the Campaign Manager can update voter records.");
-      return;
+  function queueBackgroundRefresh() {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
     }
 
-    setMessage("");
+    refreshTimeoutRef.current = setTimeout(() => {
+      if (profile && canAccess) {
+        loadVoters();
+      }
+    }, 900);
+  }
 
-    const { error } = await supabase.from("voters").update(payload).eq("id", voterId);
+  function applyLocalVoterUpdate(voterId: string, payload: Partial<Voter>) {
+    const assignedCampaigner =
+      typeof payload.campaigner_id !== "undefined"
+        ? campaigners.find((person) => person.id === payload.campaigner_id) || null
+        : undefined;
+
+    setVoters((current) =>
+      current.map((voter) => {
+        if (voter.id !== voterId) return voter;
+
+        return {
+          ...voter,
+          ...payload,
+          campaigners:
+            typeof payload.campaigner_id !== "undefined"
+              ? assignedCampaigner
+                ? {
+                    id: assignedCampaigner.id,
+                    full_name: assignedCampaigner.full_name,
+                  }
+                : null
+              : voter.campaigners,
+        };
+      })
+    );
+  }
+
+  async function updateVoter(
+    voterId: string,
+    payload: Partial<Voter>,
+    options: { backgroundRefresh?: boolean } = {}
+  ) {
+    if (!canManage) {
+      alert("Only the Campaign Manager can update voter records.");
+      return false;
+    }
+
+    const previousVoter = voters.find((voter) => voter.id === voterId) || null;
+    const cleanPayload = { ...payload } as Record<string, unknown>;
+
+    delete cleanPayload.id;
+    delete cleanPayload.campaigners;
+    delete cleanPayload.voted_at;
+
+    setMessage("");
+    applyLocalVoterUpdate(voterId, payload);
+
+    const { data, error } = await supabase
+      .from("voters")
+      .update(cleanPayload)
+      .eq("id", voterId)
+      .select(voterSelect)
+      .maybeSingle();
 
     if (error) {
       console.error("Update voter error:", error);
+
+      if (previousVoter) {
+        setVoters((current) =>
+          current.map((voter) => (voter.id === voterId ? previousVoter : voter))
+        );
+      }
+
       setMessage(error.message || "Error updating voter.");
-      return;
+      return false;
     }
 
-    await loadVoters();
+    if (data) {
+      const updatedVoter = normalizeVoter(data as RawVoter);
+
+      setVoters((current) =>
+        current.map((voter) => (voter.id === voterId ? updatedVoter : voter))
+      );
+    }
+
+    if (options.backgroundRefresh !== false) {
+      queueBackgroundRefresh();
+    }
+
+    return true;
   }
 
   function requestBulkUpdate(label: string, payload: Partial<Voter>) {
@@ -884,9 +972,11 @@ export default function VotersPage() {
   }
 
   async function saveManageModal() {
-    if (!manageVoter) return;
+    if (!manageVoter || savingManage) return;
 
-    await updateVoter(manageVoter.id, {
+    setSavingManage(true);
+
+    const saved = await updateVoter(manageVoter.id, {
       contact_no: manageContact.trim() || null,
       phone: manageContact.trim() || null,
       zone: manageZone || null,
@@ -897,7 +987,12 @@ export default function VotersPage() {
       pickup_needed: managePickupStatus !== "No Pickup Needed",
     });
 
-    setManageVoter(null);
+    setSavingManage(false);
+
+    if (saved) {
+      setManageVoter(null);
+      setMessage("Voter saved.");
+    }
   }
 
   if (loading) {
@@ -1714,16 +1809,18 @@ export default function VotersPage() {
                 <div className="mt-6 grid gap-3 md:grid-cols-2">
                   <button
                     onClick={() => setManageVoter(null)}
-                    className="rounded-2xl border border-slate-300 px-4 py-3 font-black text-slate-700 hover:bg-slate-50"
+                    disabled={savingManage}
+                    className="rounded-2xl border border-slate-300 px-4 py-3 font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Cancel
                   </button>
 
                   <button
                     onClick={saveManageModal}
-                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800"
+                    disabled={savingManage}
+                    className="rounded-2xl bg-blue-700 px-4 py-3 font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    Save Changes
+                    {savingManage ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </div>
