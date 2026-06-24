@@ -160,7 +160,7 @@ const pickupStatuses = [
   "At Polling Station",
   "Completed",
   "Issue",
-  "No Pickup Needed",
+  "Not Needed",
 ];
 
 function normalizeVoter(item: RawVoter): Voter {
@@ -991,10 +991,10 @@ export default function VotersPage() {
     setManagePickupNeeded(Boolean(voter.pickup_needed));
     setManagePickupStatus(
       voter.pickup_needed
-        ? voter.pickup_status && voter.pickup_status !== "No Pickup Needed"
+        ? voter.pickup_status && voter.pickup_status !== "Not Needed"
           ? voter.pickup_status
           : "Not Contacted"
-        : "No Pickup Needed"
+        : "Not Needed"
     );
     setManageSupportStatus(voter.support_status || "Unknown");
     setManageCampaignerId(voter.campaigner_id || "");
@@ -1016,10 +1016,10 @@ export default function VotersPage() {
       notes: manageNotes.trim() || null,
       pickup_needed: managePickupNeeded,
       pickup_status: managePickupNeeded
-        ? managePickupStatus && managePickupStatus !== "No Pickup Needed"
+        ? managePickupStatus && managePickupStatus !== "Not Needed"
           ? managePickupStatus
           : "Not Contacted"
-        : "No Pickup Needed",
+        : "Not Needed",
     });
 
     setSavingManage(false);
@@ -1568,7 +1568,7 @@ export default function VotersPage() {
                           {voter.pickup_needed ? "Needed" : "Not Needed"}
                         </span>
                         <p className="mt-2 text-xs text-slate-500">
-                          {voter.pickup_status || "Not Contacted"}
+                          {voter.pickup_needed ? voter.pickup_status || "Not Contacted" : ""}
                         </p>
                       </td>
 
@@ -1779,7 +1779,7 @@ export default function VotersPage() {
                           const checked = event.target.checked;
                           setManagePickupNeeded(checked);
                           setManagePickupStatus(
-                            checked ? "Not Contacted" : "No Pickup Needed"
+                            checked ? "Not Contacted" : "Not Needed"
                           );
                         }}
                         className="h-6 w-6 shrink-0"
@@ -1789,7 +1789,7 @@ export default function VotersPage() {
                     <div>
                       <FieldLabel>Pickup Status</FieldLabel>
                       <SelectField
-                        value={managePickupNeeded ? managePickupStatus : "No Pickup Needed"}
+                        value={managePickupNeeded ? managePickupStatus : "Not Needed"}
                         onChange={setManagePickupStatus}
                         disabled={!managePickupNeeded}
                       >
