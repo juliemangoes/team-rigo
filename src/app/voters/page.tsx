@@ -215,6 +215,20 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function VotedBadge({ voted }: { voted: boolean }) {
+  return (
+    <span
+      className={`inline-flex min-w-[92px] items-center justify-center rounded-full px-3 py-2 text-xs font-black leading-none whitespace-nowrap ${
+        voted
+          ? "bg-green-100 text-green-800"
+          : "bg-red-100 text-red-800"
+      }`}
+    >
+      {voted ? "Voted" : "Not Voted"}
+    </span>
+  );
+}
+
 function SummaryCard({
   label,
   value,
@@ -254,16 +268,19 @@ function SelectField({
   value,
   onChange,
   children,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <select
       value={value}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
     >
       {children}
     </select>
@@ -321,6 +338,9 @@ export default function VotersPage() {
   const [managePollingArea, setManagePollingArea] = useState("");
   const [manageNotes, setManageNotes] = useState("");
   const [managePickupStatus, setManagePickupStatus] = useState("");
+  const [managePickupNeeded, setManagePickupNeeded] = useState(false);
+  const [manageSupportStatus, setManageSupportStatus] = useState("Unknown");
+  const [manageCampaignerId, setManageCampaignerId] = useState("");
 
   const canAccess =
     profile?.role === "Campaign Manager" || profile?.role === "Zone Leader";
@@ -968,7 +988,16 @@ export default function VotersPage() {
     setManageZone(voter.zone || "");
     setManagePollingArea(voter.polling_area || voter.polling_station || "");
     setManageNotes(voter.notes || "");
-    setManagePickupStatus(voter.pickup_status || "Not Contacted");
+    setManagePickupNeeded(Boolean(voter.pickup_needed));
+    setManagePickupStatus(
+      voter.pickup_needed
+        ? voter.pickup_status && voter.pickup_status !== "No Pickup Needed"
+          ? voter.pickup_status
+          : "Not Contacted"
+        : "No Pickup Needed"
+    );
+    setManageSupportStatus(voter.support_status || "Unknown");
+    setManageCampaignerId(voter.campaigner_id || "");
   }
 
   async function saveManageModal() {
@@ -982,9 +1011,15 @@ export default function VotersPage() {
       zone: manageZone || null,
       polling_area: managePollingArea || null,
       polling_station: managePollingArea || null,
+      support_status: manageSupportStatus || "Unknown",
+      campaigner_id: manageCampaignerId || null,
       notes: manageNotes.trim() || null,
-      pickup_status: managePickupStatus || "Not Contacted",
-      pickup_needed: managePickupStatus !== "No Pickup Needed",
+      pickup_needed: managePickupNeeded,
+      pickup_status: managePickupNeeded
+        ? managePickupStatus && managePickupStatus !== "No Pickup Needed"
+          ? managePickupStatus
+          : "Not Contacted"
+        : "No Pickup Needed",
     });
 
     setSavingManage(false);
@@ -1369,15 +1404,7 @@ export default function VotersPage() {
                         {getSupportStatusLabel(voter.support_status)}
                       </span>
 
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-black ${
-                          voter.voted
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {voter.voted ? "Voted" : "Not Voted"}
-                      </span>
+<VotedBadge voted={voter.voted} />
 
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-black ${
@@ -1431,27 +1458,12 @@ export default function VotersPage() {
                     </div>
 
                     {canManage && (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <SelectField
-                          value={voter.support_status || "Unknown"}
-                          onChange={(value) =>
-                            updateVoter(voter.id, { support_status: value })
-                          }
-                        >
-                          {supportStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {getSupportStatusLabel(status)}
-                            </option>
-                          ))}
-                        </SelectField>
-
-                        <button
-                          onClick={() => openManageModal(voter)}
-                          className="rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
-                        >
-                          Manage
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => openManageModal(voter)}
+                        className="mt-4 w-full rounded-2xl bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
+                      >
+                        Manage Voter
+                      </button>
                     )}
                   </article>
                 );
@@ -1526,56 +1538,19 @@ export default function VotersPage() {
                       </td>
 
                       <td className="px-3 py-3">
-                        {canManage ? (
-                          <select
-                            value={voter.support_status || "Unknown"}
-                            onChange={(event) =>
-                              updateVoter(voter.id, {
-                                support_status: event.target.value,
-                              })
-                            }
-                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-900"
-                          >
-                            {supportStatuses.map((status) => (
-                              <option key={status} value={status}>
-                                {getSupportStatusLabel(status)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-black ${getSupportPillClass(
-                              voter.support_status
-                            )}`}
-                          >
-                            {getSupportStatusLabel(voter.support_status)}
-                          </span>
-                        )}
+                        <span
+                          className={`inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-black leading-none whitespace-nowrap ${getSupportPillClass(
+                            voter.support_status
+                          )}`}
+                        >
+                          {getSupportStatusLabel(voter.support_status)}
+                        </span>
                       </td>
 
                       <td className="px-3 py-3">
-                        {canManage ? (
-                          <select
-                            value={voter.campaigner_id || ""}
-                            onChange={(event) =>
-                              updateVoter(voter.id, {
-                                campaigner_id: event.target.value || null,
-                              })
-                            }
-                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-900"
-                          >
-                            <option value="">Unassigned</option>
-                            {campaignerOptions.map((person) => (
-                              <option key={person.id} value={person.id}>
-                                {person.full_name}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="font-bold text-slate-700">
-                            {voter.campaigners?.full_name || "Unassigned"}
-                          </span>
-                        )}
+                        <span className="font-bold text-slate-700">
+                          {voter.campaigners?.full_name || "Unassigned"}
+                        </span>
                       </td>
 
                       <td className="px-3 py-3 font-bold text-slate-700">
@@ -1583,56 +1558,29 @@ export default function VotersPage() {
                       </td>
 
                       <td className="px-3 py-3">
-                        {canManage ? (
-                          <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">
-                            <input
-                              type="checkbox"
-                              checked={voter.pickup_needed}
-                              onChange={(event) =>
-                                updateVoter(voter.id, {
-                                  pickup_needed: event.target.checked,
-                                  pickup_status: event.target.checked
-                                    ? voter.pickup_status || "Not Contacted"
-                                    : "No Pickup Needed",
-                                })
-                              }
-                              className="h-5 w-5"
-                            />
-                            Needed
-                          </label>
-                        ) : (
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-black ${
-                              voter.pickup_needed
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            {voter.pickup_needed ? "Needed" : "Not Needed"}
-                          </span>
-                        )}
+                        <span
+                          className={`inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-black leading-none whitespace-nowrap ${
+                            voter.pickup_needed
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {voter.pickup_needed ? "Needed" : "Not Needed"}
+                        </span>
                         <p className="mt-2 text-xs text-slate-500">
                           {voter.pickup_status || "Not Contacted"}
                         </p>
                       </td>
 
                       <td className="px-3 py-3">
-                        {voter.voted ? (
-                          <div>
-                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-black text-green-800">
-                              Voted
-                            </span>
-                            {voter.voted_at && (
-                              <p className="mt-2 text-xs font-bold text-green-700">
-                                {formatTime(voter.voted_at)}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-800">
-                            Not Voted
-                          </span>
-                        )}
+                        <div>
+                          <VotedBadge voted={voter.voted} />
+                          {voter.voted && voter.voted_at && (
+                            <p className="mt-2 text-xs font-bold text-green-700">
+                              {formatTime(voter.voted_at)}
+                            </p>
+                          )}
+                        </div>
                       </td>
 
                       {canManage && (
@@ -1756,6 +1704,37 @@ export default function VotersPage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
+                      <FieldLabel>Support Status</FieldLabel>
+                      <SelectField
+                        value={manageSupportStatus}
+                        onChange={setManageSupportStatus}
+                      >
+                        {supportStatuses.map((status) => (
+                          <option key={status} value={status}>
+                            {getSupportStatusLabel(status)}
+                          </option>
+                        ))}
+                      </SelectField>
+                    </div>
+
+                    <div>
+                      <FieldLabel>Campaigner Assigned</FieldLabel>
+                      <SelectField
+                        value={manageCampaignerId}
+                        onChange={setManageCampaignerId}
+                      >
+                        <option value="">Unassigned</option>
+                        {campaignerOptions.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.full_name}
+                          </option>
+                        ))}
+                      </SelectField>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
                       <FieldLabel>Zone</FieldLabel>
                       <SelectField value={manageZone} onChange={setManageZone}>
                         <option value="">No zone</option>
@@ -1783,16 +1762,42 @@ export default function VotersPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <FieldLabel>Pickup Status</FieldLabel>
-                    <SelectField
-                      value={managePickupStatus}
-                      onChange={setManagePickupStatus}
-                    >
-                      {pickupStatuses.map((status) => (
-                        <option key={status}>{status}</option>
-                      ))}
-                    </SelectField>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 shadow-sm">
+                      <span>
+                        <span className="block text-xs font-black uppercase tracking-wide text-slate-500">
+                          Pickup Needed
+                        </span>
+                        <span className="mt-1 block text-sm font-semibold text-slate-600">
+                          Mark this voter for pickup follow-up.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={managePickupNeeded}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setManagePickupNeeded(checked);
+                          setManagePickupStatus(
+                            checked ? "Not Contacted" : "No Pickup Needed"
+                          );
+                        }}
+                        className="h-6 w-6 shrink-0"
+                      />
+                    </label>
+
+                    <div>
+                      <FieldLabel>Pickup Status</FieldLabel>
+                      <SelectField
+                        value={managePickupNeeded ? managePickupStatus : "No Pickup Needed"}
+                        onChange={setManagePickupStatus}
+                        disabled={!managePickupNeeded}
+                      >
+                        {pickupStatuses.map((status) => (
+                          <option key={status}>{status}</option>
+                        ))}
+                      </SelectField>
+                    </div>
                   </div>
 
                   <div>
