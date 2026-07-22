@@ -27,7 +27,7 @@ function jsonResponse(body, status = 200) {
 }
 
 function normalizeEmail(value) {
-  return value.trim().toLowerCase();
+  return String(value || "").trim().toLowerCase();
 }
 
 function cleanNullable(value) {
@@ -35,6 +35,35 @@ function cleanNullable(value) {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+async function findAuthUserByEmail(adminClient, email) {
+  const targetEmail = normalizeEmail(email);
+  let page = 1;
+  const perPage = 1000;
+
+  while (page <= 20) {
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = data?.users || [];
+    const found = users.find(
+      (user) => normalizeEmail(user.email || "") === targetEmail
+    );
+
+    if (found) return found;
+    if (users.length < perPage) return null;
+
+    page += 1;
+  }
+
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -102,7 +131,7 @@ Deno.serve(async (req) => {
 
   if (callerProfile?.role !== "Campaign Manager") {
     return jsonResponse(
-      { error: "Only a Campaign Manager can create team logins." },
+      { error: "Only a Campaign Manager can create or reset team logins." },
       403
     );
   }
@@ -115,14 +144,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Invalid JSON body." }, 400);
   }
 
-  const fullName = (payload.full_name || "").trim();
+  const action = payload.action || "create-team-member";
   const email = normalizeEmail(payload.email || "");
-  const password = (payload.password || "").trim();
-  const role = payload.role || "Campaigner";
-
-  if (!fullName) {
-    return jsonResponse({ error: "Full name is required." }, 400);
-  }
+  const password = String(payload.password || "").trim();
 
   if (!email || !email.includes("@")) {
     return jsonResponse({ error: "A valid email is required." }, 400);
@@ -133,6 +157,55 @@ Deno.serve(async (req) => {
       { error: "Temporary password must be at least 8 characters." },
       400
     );
+  }
+
+  if (action === "reset-password") {
+    let authUser;
+
+    try {
+      authUser = await findAuthUserByEmail(adminClient, email);
+    } catch (error) {
+      return jsonResponse(
+        { error: `Could not search Auth users: ${error.message}` },
+        500
+      );
+    }
+
+    if (!authUser?.id) {
+      return jsonResponse(
+        {
+          error:
+            "No Supabase Auth user was found for this email. Create the login first or correct the email.",
+        },
+        404
+      );
+    }
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      authUser.id,
+      {
+        password,
+        email_confirm: true,
+      }
+    );
+
+    if (updateError) {
+      return jsonResponse({ error: updateError.message }, 400);
+    }
+
+    return jsonResponse({
+      success: true,
+      action: "reset-password",
+      auth_user_id: authUser.id,
+      email,
+    });
+  }
+
+  const fullName = String(payload.full_name || "").trim();
+  const role = payload.role || "Campaigner";
+
+  if (!fullName) {
+    return jsonResponse({ error: "Full name is required." }, 400);
   }
 
   if (!allowedRoles.has(role)) {
@@ -157,6 +230,7 @@ Deno.serve(async (req) => {
   }
 
   let authUserCreated = true;
+  let authUserId = null;
 
   const { data: createdUser, error: createUserError } =
     await adminClient.auth.admin.createUser({
@@ -178,9 +252,18 @@ Deno.serve(async (req) => {
       message.toLowerCase().includes("exists")
     ) {
       authUserCreated = false;
+
+      try {
+        const existingUser = await findAuthUserByEmail(adminClient, email);
+        authUserId = existingUser?.id || null;
+      } catch (_error) {
+        authUserId = null;
+      }
     } else {
       return jsonResponse({ error: message }, 400);
     }
+  } else {
+    authUserId = createdUser?.user?.id || null;
   }
 
   const profilePayload = {
@@ -248,8 +331,9 @@ Deno.serve(async (req) => {
 
   return jsonResponse({
     success: true,
+    action: "create-team-member",
     auth_user_created: authUserCreated,
-    auth_user_id: createdUser?.user?.id || null,
+    auth_user_id: authUserId,
     profile: savedProfile,
   });
 });

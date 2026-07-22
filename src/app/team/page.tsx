@@ -211,6 +211,7 @@ export default function TeamSetupPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resettingMemberId, setResettingMemberId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   const [search, setSearch] = useState("");
@@ -499,6 +500,62 @@ export default function TeamSetupPage() {
     setSaving(false);
   }
 
+  async function resetMemberPassword(member: TeamMember) {
+    if (!canAccess) return;
+
+    const email = normalizeEmail(member.email || "");
+
+    if (!email || !email.includes("@")) {
+      setMessage("This team member needs a valid email login before password reset.");
+      return;
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+
+    const confirmed = confirm(
+      `Reset password for ${member.full_name}?\n\nNew temporary password:\n${temporaryPassword}\n\nCopy this password before continuing.`
+    );
+
+    if (!confirmed) return;
+
+    setResettingMemberId(member.id);
+    setMessage("");
+
+    const { data, error } = await supabase.functions.invoke(
+      "create-team-member",
+      {
+        body: {
+          action: "reset-password",
+          email,
+          password: temporaryPassword,
+        },
+      }
+    );
+
+    if (error) {
+      console.error("Reset password error:", error);
+      setMessage(error.message || "Error resetting password.");
+      setResettingMemberId(null);
+      return;
+    }
+
+    if (data?.error) {
+      setMessage(data.error);
+      setResettingMemberId(null);
+      return;
+    }
+
+    setCreatedCredential({
+      full_name: member.full_name,
+      email,
+      password: temporaryPassword,
+      role: member.role || "Team Member",
+    });
+
+    setMessage("Temporary password reset. Copy the new credentials below.");
+    setResettingMemberId(null);
+  }
+
   async function deleteMember(member: TeamMember) {
     if (!canAccess) return;
 
@@ -649,6 +706,40 @@ export default function TeamSetupPage() {
             </div>
           )}
 
+          {createdCredential && (
+            <div className="mt-4 rounded-3xl border border-green-200 bg-green-50 p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-green-700">
+                    Temporary Credentials
+                  </p>
+                  <p className="mt-2 text-sm font-black text-slate-950">
+                    {createdCredential.full_name} · {createdCredential.role}
+                  </p>
+                  <div className="mt-3 rounded-2xl bg-white p-3 text-sm font-semibold text-slate-700">
+                    <p>
+                      <span className="font-black">Email:</span>{" "}
+                      {createdCredential.email}
+                    </p>
+                    <p className="mt-1">
+                      <span className="font-black">Temporary Password:</span>{" "}
+                      <span className="select-all rounded-lg bg-slate-100 px-2 py-1 font-black text-slate-950">
+                        {createdCredential.password}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setCreatedCredential(null)}
+                  className="rounded-2xl border border-green-200 bg-white px-4 py-3 text-sm font-black text-green-700 hover:bg-green-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             <SummaryCard label="Total" value={formatNumber(teamStats.total)} />
             <SummaryCard
@@ -788,12 +879,20 @@ export default function TeamSetupPage() {
                     </div>
                   )}
 
-                  <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="mt-4 grid grid-cols-3 gap-3">
                     <button
                       onClick={() => openEditForm(member)}
                       className="rounded-2xl bg-sky-700 px-4 py-3 text-sm font-black text-white hover:bg-sky-800"
                     >
                       Edit
+                    </button>
+
+                    <button
+                      onClick={() => resetMemberPassword(member)}
+                      disabled={resettingMemberId === member.id}
+                      className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {resettingMemberId === member.id ? "Resetting..." : "Reset"}
                     </button>
 
                     <button
@@ -878,12 +977,20 @@ export default function TeamSetupPage() {
                       </td>
 
                       <td className="px-3 py-3">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => openEditForm(member)}
                             className="rounded-xl bg-sky-700 px-3 py-2 text-xs font-black text-white hover:bg-sky-800"
                           >
                             Edit
+                          </button>
+
+                          <button
+                            onClick={() => resetMemberPassword(member)}
+                            disabled={resettingMemberId === member.id}
+                            className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {resettingMemberId === member.id ? "Resetting..." : "Reset Password"}
                           </button>
 
                           <button
