@@ -84,6 +84,11 @@ type Voter = {
   voted: boolean;
   voted_at: string | null;
   notes: string | null;
+  convention_eligible: boolean | null;
+  convention_status: string | null;
+  convention_batch_id: string | null;
+  convention_match_method: string | null;
+  convention_review_note: string | null;
   campaigners?: {
     id: string;
     full_name: string;
@@ -137,6 +142,11 @@ const voterSelect = `
   voted,
   voted_at,
   notes,
+  convention_eligible,
+  convention_status,
+  convention_batch_id,
+  convention_match_method,
+  convention_review_note,
   campaigners:campaigner_id (
     id,
     full_name
@@ -309,6 +319,7 @@ export default function VotersPage() {
   const [supportFilter, setSupportFilter] = useState("All");
   const [campaignerFilter, setCampaignerFilter] = useState("All");
   const [pickupFilter, setPickupFilter] = useState("All");
+  const [conventionFilter, setConventionFilter] = useState("Convention Only");
 
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -341,6 +352,7 @@ export default function VotersPage() {
   const [managePickupNeeded, setManagePickupNeeded] = useState(false);
   const [manageSupportStatus, setManageSupportStatus] = useState("Unknown");
   const [manageCampaignerId, setManageCampaignerId] = useState("");
+  const [manageConventionStatus, setManageConventionStatus] = useState("Convention Eligible");
 
   const canAccess =
     profile?.role === "Campaign Manager" || profile?.role === "Zone Leader";
@@ -369,6 +381,7 @@ export default function VotersPage() {
     supportFilter,
     campaignerFilter,
     pickupFilter,
+    conventionFilter,
   ]);
 
   async function loadInitialData() {
@@ -645,6 +658,7 @@ export default function VotersPage() {
       p_support_status: supportFilter,
       p_campaigner_id: campaignerFilter,
       p_pickup_filter: pickupFilter,
+      p_convention_filter: conventionFilter,
       p_page: page,
       p_page_size: PAGE_SIZE,
     });
@@ -1006,6 +1020,12 @@ export default function VotersPage() {
     );
     setManageSupportStatus(voter.support_status || "Unknown");
     setManageCampaignerId(voter.campaigner_id || "");
+    setManageConventionStatus(
+      voter.convention_status ||
+        (voter.convention_eligible === false
+          ? "Not on Convention List"
+          : "Convention Eligible")
+    );
   }
 
   async function saveManageModal() {
@@ -1028,6 +1048,8 @@ export default function VotersPage() {
           ? managePickupStatus
           : "Not Contacted"
         : "No Pickup Needed",
+      convention_status: manageConventionStatus,
+      convention_eligible: manageConventionStatus !== "Not on Convention List",
     });
 
     setSavingManage(false);
@@ -1146,7 +1168,7 @@ export default function VotersPage() {
       <section className="px-4 py-5 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-7xl">
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="grid gap-3 lg:grid-cols-[1.5fr_repeat(5,1fr)_auto] lg:items-end">
+            <div className="grid gap-3 lg:grid-cols-[1.5fr_repeat(6,1fr)_auto] lg:items-end">
               <div>
                 <FieldLabel>Search</FieldLabel>
                 <input
@@ -1158,6 +1180,24 @@ export default function VotersPage() {
                   className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                   placeholder="Search exact name, reg no., phone..."
                 />
+              </div>
+
+              <div>
+                <FieldLabel>List</FieldLabel>
+                <SelectField
+                  value={conventionFilter}
+                  onChange={(value) => {
+                    setConventionFilter(value);
+                    resetToFirstPage();
+                  }}
+                >
+                  <option>Convention Only</option>
+                  <option>Master List</option>
+                  <option>Not on Convention List</option>
+                  <option>New Convention Voter</option>
+                  <option>Needs Review</option>
+                  <option>Pending Review</option>
+                </SelectField>
               </div>
 
               <div>
@@ -1710,7 +1750,7 @@ export default function VotersPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <FieldLabel>Support Status</FieldLabel>
                       <SelectField
@@ -1737,6 +1777,20 @@ export default function VotersPage() {
                             {person.full_name}
                           </option>
                         ))}
+                      </SelectField>
+                    </div>
+
+                    <div>
+                      <FieldLabel>Convention Status</FieldLabel>
+                      <SelectField
+                        value={manageConventionStatus}
+                        onChange={setManageConventionStatus}
+                      >
+                        <option>Convention Eligible</option>
+                        <option>Not on Convention List</option>
+                        <option>New Convention Voter</option>
+                        <option>Needs Review</option>
+                        <option>Pending Convention Review</option>
                       </SelectField>
                     </div>
                   </div>
