@@ -78,6 +78,8 @@ type Voter = {
   voted: boolean;
   voted_at: string | null;
   notes: string | null;
+  convention_eligible: boolean | null;
+  convention_status: string | null;
   campaigners?: {
     id: string;
     full_name: string;
@@ -131,6 +133,8 @@ const voterSelect = `
   voted,
   voted_at,
   notes,
+  convention_eligible,
+  convention_status,
   campaigners:campaigner_id (
     id,
     full_name
@@ -141,37 +145,37 @@ const reportTypes: { value: ReportType; label: string; description: string }[] =
   {
     value: "filtered",
     label: "Filtered Voter List",
-    description: "Export the current filtered voter list.",
+    description: "Export the current filtered convention-eligible voter list.",
   },
   {
     value: "support_status",
     label: "By Support Status",
-    description: "Group voters by support status.",
+    description: "Group convention-eligible voters by support status.",
   },
   {
     value: "zone",
     label: "By Zone",
-    description: "Group voters by campaign zone.",
+    description: "Group convention-eligible voters by campaign zone.",
   },
   {
     value: "polling_area",
     label: "By Polling Area",
-    description: "Group voters by polling area.",
+    description: "Group convention-eligible voters by polling area.",
   },
   {
     value: "campaigner",
     label: "By Campaigner",
-    description: "Group voters by assigned campaigner.",
+    description: "Group convention-eligible voters by assigned campaigner.",
   },
   {
     value: "unassigned",
     label: "Unassigned Voters",
-    description: "Export voters not assigned to a campaigner.",
+    description: "Export convention-eligible voters not assigned to a campaigner.",
   },
   {
     value: "voted_status",
     label: "Voted / Not Voted",
-    description: "Group voters by voted status.",
+    description: "Group convention-eligible voters by voted status.",
   },
 ];
 
@@ -196,6 +200,7 @@ async function fetchAllReportVoters() {
     const { data, error } = await supabase
       .from("voters")
       .select(voterSelect)
+      .eq("convention_eligible", true)
       .order("last_name", { ascending: true, nullsFirst: false })
       .order("first_name", { ascending: true, nullsFirst: false })
       .order("id", { ascending: true })
@@ -752,6 +757,7 @@ export default function ReportsPage() {
 
   function activeFilterText() {
     const parts = [
+      `List: Convention Eligible Only`,
       `Report: ${selectedReport.label}`,
       supportFilter !== "All" ? `Support: ${getSupportLabel(supportFilter)}` : "",
       zoneFilter !== "All" ? `Zone: ${zoneFilter}` : "",
@@ -882,7 +888,7 @@ export default function ReportsPage() {
         .replace(/(^-|-$)/g, "");
 
       doc.setProperties({
-        title: `${selectedReport.label} - Team Rigo Report`,
+        title: `${selectedReport.label} - Team Rigo Convention Eligible Report`,
         subject: activeFilterText(),
         author: "Team Rigo",
         creator: "Team Rigo Campaign Operations",
@@ -894,10 +900,10 @@ export default function ReportsPage() {
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("TEAM RIGO CAMPAIGN OPERATIONS", 56, 56);
+      doc.text("TEAM RIGO CAMPAIGN OPERATIONS · CONVENTION ELIGIBLE ONLY", 56, 56);
 
       doc.setFontSize(24);
-      doc.text(selectedReport.label, 56, 86);
+      doc.text(`${selectedReport.label}`, 56, 86);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
@@ -907,7 +913,7 @@ export default function ReportsPage() {
       doc.setTextColor(15, 23, 42);
 
       const statCards = [
-        ["Total Voters", formatNumber(totals.total)],
+        ["Eligible Voters", formatNumber(totals.total)],
         ["Confirmed", formatNumber(totals.confirmed)],
         ["Not Supporting", formatNumber(totals.notSupporting)],
         ["Voted", formatNumber(totals.voted)],
@@ -1008,7 +1014,7 @@ export default function ReportsPage() {
         doc.setFontSize(8);
         doc.setTextColor(71, 85, 105);
         doc.text(
-          `Exporting ${formatNumber(reportVoters.length)} voter(s).`,
+          `Exporting ${formatNumber(reportVoters.length)} convention-eligible voter(s).`,
           32,
           58
         );
@@ -1082,7 +1088,7 @@ export default function ReportsPage() {
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
         doc.text(
-          `Team Rigo Report · Page ${pageNumber} of ${pageCount}`,
+          `Team Rigo Convention Report · Eligible Voters Only · Page ${pageNumber} of ${pageCount}`,
           32,
           pageHeight - 18
         );
@@ -1091,7 +1097,7 @@ export default function ReportsPage() {
         });
       }
 
-      doc.save(`${safeName || "team-rigo-report"}.pdf`);
+      doc.save(`convention-${safeName || "team-rigo-report"}.pdf`);
       setMessage("PDF report downloaded.");
     } catch (error) {
       console.error("PDF export error:", error);
@@ -1117,6 +1123,7 @@ export default function ReportsPage() {
       "pickup_needed",
       "pickup_status",
       "notes",
+      "convention_status",
     ];
 
     const lines = [
@@ -1135,6 +1142,7 @@ export default function ReportsPage() {
           voter.pickup_needed ? "Yes" : "No",
           voter.pickup_status || "",
           voter.notes || "",
+          voter.convention_status || "Convention Eligible",
         ]
           .map((value) => `"${String(value).replaceAll('"', '""')}"`)
           .join(",")
@@ -1146,7 +1154,7 @@ export default function ReportsPage() {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
 
-    downloadText(`${safeName || "report"}.csv`, lines.join("\n"), "text/csv");
+    downloadText(`convention-${safeName || "report"}.csv`, lines.join("\n"), "text/csv");
   }
 
   if (loading) {
@@ -1191,9 +1199,14 @@ export default function ReportsPage() {
               </h1>
 
               <p className="mt-2 max-w-3xl text-sm text-slate-500 sm:text-base">
-                Build and export PDF reports by support status, zone, polling
-                area, campaigner, unassigned voters, and voted status.
+                Build and export PDF/CSV reports for convention-eligible voters only,
+                grouped by support status, zone, polling area, campaigner, assignment,
+                and voted status.
               </p>
+
+              <div className="mt-4 inline-flex rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-blue-800">
+                Convention Eligible Only
+              </div>
             </div>
 
             <button
@@ -1211,7 +1224,7 @@ export default function ReportsPage() {
           )}
 
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-            <SummaryCard label="Total" value={formatNumber(totals.total)} />
+            <SummaryCard label="Eligible" value={formatNumber(totals.total)} />
             <SummaryCard
               label="Confirmed"
               value={formatNumber(totals.confirmed)}
@@ -1476,7 +1489,7 @@ export default function ReportsPage() {
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Showing first {formatNumber(Math.min(reportVoters.length, 100))} of{" "}
-                  {formatNumber(reportVoters.length)} voter(s).
+                  {formatNumber(reportVoters.length)} convention-eligible voter(s).
                 </p>
               </div>
             </div>
