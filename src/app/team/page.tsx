@@ -381,9 +381,7 @@ export default function TeamSetupPage() {
       phone: form.phone.trim() || null,
       role,
       zone: form.zone || null,
-      assigned_polling_area: isScrutineer
-        ? form.assigned_polling_area || null
-        : null,
+      assigned_polling_area: isScrutineer ? "ALL" : null,
       assigned_classroom: isScrutineer
         ? form.assigned_classroom.trim() || null
         : null,
@@ -410,10 +408,6 @@ export default function TeamSetupPage() {
     }
 
     if (form.role === "Scrutineer") {
-      if (!form.assigned_polling_area) {
-        return "Select the scrutineer's polling area.";
-      }
-
       if (!form.assigned_classroom.trim()) {
         return "Enter the scrutineer's classroom.";
       }
@@ -602,6 +596,11 @@ export default function TeamSetupPage() {
     return area.name ? `${area.code} - ${area.name}` : area.code;
   }
 
+  function scrutineerPollingLabel(value: string | null) {
+    if (!value || value === "ALL") return "All polling areas";
+    return pollingAreaLabel(value);
+  }
+
   const filteredMembers = useMemo(() => {
     const cleanSearch = search.trim().toLowerCase();
 
@@ -612,7 +611,9 @@ export default function TeamSetupPage() {
         (member.email || "").toLowerCase().includes(cleanSearch) ||
         (member.phone || "").toLowerCase().includes(cleanSearch) ||
         (member.zone || "").toLowerCase().includes(cleanSearch) ||
-        (member.assigned_polling_area || "").toLowerCase().includes(cleanSearch);
+        (member.assigned_polling_area || "").toLowerCase().includes(cleanSearch) ||
+        (member.role === "Scrutineer" &&
+          "all polling areas".includes(cleanSearch));
 
       const matchesRole = roleFilter === "All" || member.role === roleFilter;
       const matchesZone = zoneFilter === "All" || member.zone === zoneFilter;
@@ -873,7 +874,7 @@ export default function TeamSetupPage() {
 
                   {member.role === "Scrutineer" && (
                     <div className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-800">
-                      Polling {member.assigned_polling_area || "Not set"} · Room{" "}
+                      {scrutineerPollingLabel(member.assigned_polling_area)} · Room{" "}
                       {member.assigned_classroom || "Not set"} ·{" "}
                       {member.surname_from || "?"} to {member.surname_to || "?"}
                     </div>
@@ -966,7 +967,7 @@ export default function TeamSetupPage() {
                       <td className="px-3 py-3 font-semibold text-slate-700">
                         {member.role === "Scrutineer" ? (
                           <span>
-                            Polling {member.assigned_polling_area || "Not set"} ·
+                            {scrutineerPollingLabel(member.assigned_polling_area)} ·
                             Room {member.assigned_classroom || "Not set"} ·{" "}
                             {member.surname_from || "?"} to{" "}
                             {member.surname_to || "?"}
@@ -1133,26 +1134,16 @@ export default function TeamSetupPage() {
                         Scrutineer Assignment
                       </h3>
                       <p className="mt-1 text-sm font-semibold text-red-700">
-                        Scrutineers must have a polling area, classroom and
-                        surname range.
+                        For this convention, all polling areas are together.
+                        Assign scrutineers by classroom and surname range only.
                       </p>
 
                       <div className="mt-4 grid gap-4 md:grid-cols-4">
                         <div>
                           <FieldLabel>Polling Area</FieldLabel>
-                          <SelectInput
-                            value={form.assigned_polling_area}
-                            onChange={(value) =>
-                              updateForm("assigned_polling_area", value)
-                            }
-                          >
-                            <option value="">Select polling area</option>
-                            {pollingAreas.map((area) => (
-                              <option key={area.id} value={area.code}>
-                                {pollingAreaLabel(area.code)}
-                              </option>
-                            ))}
-                          </SelectInput>
+                          <div className="flex min-h-[58px] items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm">
+                            All polling areas
+                          </div>
                         </div>
 
                         <div>
